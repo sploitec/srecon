@@ -51,13 +51,13 @@ GO111MODULE=on go get -v github.com/projectdiscovery/nuclei/v2/cmd/nuclei
 ### Basic usage:
 
 ```bash
-python recon.py example.com
+python srecon.py example.com
 ```
 
 ### Options:
 
 ```
-usage: recon.py [-h] [-o OUTPUT] [-t THREADS] [-v] target
+usage: srecon.py [-h] [-o OUTPUT] [-t THREADS] [-v] target
 
 Automated Reconnaissance Tool for Red Teaming
 
@@ -77,13 +77,13 @@ optional arguments:
 
 ```bash
 # Perform a complete scan with 10 threads
-python recon.py example.com -t 10
+python srecon.py example.com -t 10
 
 # Specify output directory
-python recon.py example.com -o output_dir
+python srecon.py example.com -o output_dir
 
 # Enable verbose output
-python recon.py example.com -v
+python srecon.py example.com -v
 ```
 
 ## Output
