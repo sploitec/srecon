@@ -202,7 +202,7 @@ class ReconTool:
             output_file = os.path.join(self.output_dir, f"nmap_{ip.replace('.', '_')}.xml")
             
             # Run nmap scan 
-            command = f"nmap -sV -p 1-1000 -T4 {ip} -oX {output_file}"
+            command = f"nmap -sV --top-ports 1000 -T4 {ip} -oX {output_file}"
             self.run_command(command, f"Port scanning for {ip}")
             
             result = {"ip": ip, "ports": [], "services": {}}
