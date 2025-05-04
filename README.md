@@ -23,14 +23,10 @@ The tool requires several external utilities that should be installed on your sy
 
 ## Installation
 
-1. Download or clone this repository to your local machine:
+1. Clone this repository to your local machine:
 ```bash
-# If using git
-git clone <your-repository-url>
-# Or simply download and extract the ZIP file
-
-# Navigate to the tool directory
-cd sploitec-recon
+git clone https://github.com/sploitec/srecon.git
+cd srecon
 ```
 
 2. Install Python dependencies:
