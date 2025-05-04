@@ -67,7 +67,7 @@ positional arguments:
 optional arguments:
   -h, --help            show this help message and exit
   -o OUTPUT, --output OUTPUT
-                        Output directory for results
+                        Custom output directory (default: results/target_timestamp)
   -t THREADS, --threads THREADS
                         Number of threads to use (default: 5)
   -v, --verbose         Enable verbose output
@@ -79,8 +79,8 @@ optional arguments:
 # Perform a complete scan with 10 threads
 python srecon.py example.com -t 10
 
-# Specify output directory
-python srecon.py example.com -o output_dir
+# Specify custom output directory
+python srecon.py example.com -o custom_output_dir
 
 # Enable verbose output
 python srecon.py example.com -v
@@ -88,7 +88,7 @@ python srecon.py example.com -v
 
 ## Output
 
-The tool creates an output directory (default: recon_[target]_[timestamp]) containing:
+All scan results are stored in the `results` directory by default. For each scan, a new directory is created with the format `target_timestamp` that contains:
 
 - `subdomains.txt` - List of discovered subdomains
 - `ip_addresses.txt` - List of resolved IP addresses
@@ -97,6 +97,18 @@ The tool creates an output directory (default: recon_[target]_[timestamp]) conta
 - `report.html` - Comprehensive HTML report
 - `summary.txt` - Summary of findings
 - `recon.log` - Tool execution log
+
+## Project Structure
+
+```
+srecon/
+├── srecon.py         # Main script
+├── requirements.txt  # Python dependencies
+├── results/          # Directory containing all scan results
+│   └── example.com_20230101_120000/  # Example scan result directory
+├── README.md         # This file
+└── .gitignore        # Git ignore configuration
+```
 
 ## Extending the Tool
 

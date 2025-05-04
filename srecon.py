@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 # Automated Recon Tool for Red Teaming
-# Author: Claude
-# Date: May 4, 2025
 
 import os
 import sys
@@ -25,12 +23,16 @@ class ReconTool:
         self.threads = threads
         self.verbose = verbose
         
+        # Create results directory if it doesn't exist
+        if not os.path.exists("results"):
+            os.makedirs("results")
+        
         # Set up output directory
         if output_dir:
             self.output_dir = output_dir
         else:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            self.output_dir = f"recon_{self.target}_{timestamp}"
+            self.output_dir = os.path.join("results", f"{self.target}_{timestamp}")
         
         # Create output directory if it doesn't exist
         if not os.path.exists(self.output_dir):
@@ -522,7 +524,7 @@ def main():
     """Main entry point for the recon tool."""
     parser = argparse.ArgumentParser(description="Automated Reconnaissance Tool for Red Teaming")
     parser.add_argument("target", help="Target domain or IP address")
-    parser.add_argument("-o", "--output", help="Output directory for results")
+    parser.add_argument("-o", "--output", help="Custom output directory (default: results/target_timestamp)")
     parser.add_argument("-t", "--threads", type=int, default=5, help="Number of threads to use")
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output")
     
