@@ -116,7 +116,7 @@ All scan results are stored in the `results` directory by default. For each scan
 srecon/
 ├── srecon.py         # Main script
 ├── requirements.txt  # Python dependencies
-├── results/          # Directory containing all scan results
+├── results/          # Directory containing all scan results (not tracked in git)
 │   └── example.com_20230101_120000/  # Example scan result directory
 ├── venv/             # Virtual environment (not tracked in git)
 ├── README.md         # This file
