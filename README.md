@@ -1,4 +1,4 @@
-# Sploitec Recon
+# Sploitec Recon Tool
 
 A modular reconnaissance tool designed for red team engagements. This tool automates common reconnaissance tasks and provides a foundation that can be extended with additional modules.
 
