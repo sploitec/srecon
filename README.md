@@ -29,12 +29,24 @@ git clone https://github.com/sploitec/srecon.git
 cd srecon
 ```
 
-2. Install Python dependencies:
+2. Create and activate a virtual environment:
+```bash
+# Create virtual environment
+python -m venv venv
+
+# Activate virtual environment
+# On Windows
+venv\Scripts\activate
+# On Linux/macOS
+source venv/bin/activate
+```
+
+3. Install Python dependencies:
 ```bash
 pip install -r requirements.txt
 ```
 
-3. Install external tools:
+4. Install external tools:
 ```bash
 # For Ubuntu/Debian
 sudo apt install nmap dnsutils
@@ -106,6 +118,7 @@ srecon/
 ├── requirements.txt  # Python dependencies
 ├── results/          # Directory containing all scan results
 │   └── example.com_20230101_120000/  # Example scan result directory
+├── venv/             # Virtual environment (not tracked in git)
 ├── README.md         # This file
 └── .gitignore        # Git ignore configuration
 ```
