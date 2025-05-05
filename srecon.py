@@ -94,7 +94,8 @@ class ReconTool:
             "ip_addresses": [],
             "open_ports": {},
             "services": {},
-            "vulnerabilities": []
+            "vulnerabilities": [],
+            "http_services": []
         }
         
         # Check dependencies
@@ -137,7 +138,8 @@ class ReconTool:
             "subfinder": "Subdomain enumeration",
             "dnsx": "DNS resolution and subdomain enumeration",
             "nmap": "Port scanning",
-            "nuclei": "Vulnerability scanning"
+            "nuclei": "Vulnerability scanning",
+            "httpx": "HTTP/HTTPS probing"
         }
         
         missing_deps = []
@@ -524,6 +526,190 @@ class ReconTool:
         self.logger.info(f"Resolved {len(self.results['ip_addresses'])} unique IP addresses")
         return self.results["ip_addresses"]
 
+    def http_probe(self, domains=None):
+        """Probe domains to identify HTTP/HTTPS services using httpx."""
+        if not self.check_user_confirmation("HTTP/HTTPS probing"):
+            self.logger.info("Skipping HTTP/HTTPS probing")
+            return []
+            
+        self.logger.info("Starting HTTP/HTTPS probing with httpx")
+        
+        # Check if httpx is available
+        if not shutil.which("httpx"):
+            self.logger.warning("httpx not found. Skipping HTTP probing.")
+            return []
+            
+        # Use domains that have resolved IPs if no specific domains provided
+        if domains is None:
+            domains = []
+            for ip, domains_for_ip in self.results.get("ip_to_domains", {}).items():
+                domains.extend(domains_for_ip)
+            # Remove duplicates
+            domains = list(set(domains))
+            
+        if not domains:
+            self.logger.warning("No domains with resolved IPs found. Skipping HTTP probing.")
+            return []
+            
+        self.logger.info(f"Probing {len(domains)} domains for HTTP/HTTPS services")
+        
+        # Create output files
+        output_file = os.path.join(self.output_dir, "http_services.txt")
+        json_output_file = os.path.join(self.output_dir, "http_services.json")
+        
+        # Clear output files if they exist
+        for file_path in [output_file, json_output_file]:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+        
+        # Create a temporary file with all domains to probe
+        temp_domains_file = os.path.join(self.output_dir, "temp_domains_for_http.txt")
+        with open(temp_domains_file, 'w') as f:
+            for domain in domains:
+                f.write(f"{domain}\n")
+        
+        # Use ThreadPoolExecutor for faster processing
+        self.logger.info("Using ThreadPoolExecutor for parallel HTTP probing")
+        
+        # Determine optimal chunk size and number of workers
+        num_domains = len(domains)
+        num_workers = min(os.cpu_count() or 4, 8)  # Limit to 8 workers max
+        chunk_size = max(1, num_domains // num_workers)
+        
+        # Split domains into chunks
+        chunks = [domains[i:i + chunk_size] for i in range(0, num_domains, chunk_size)]
+        self.logger.info(f"Split {num_domains} domains into {len(chunks)} chunks of ~{chunk_size} domains each")
+        
+        if self.debug:
+            # Print detailed information in debug mode
+            self.logger.debug(f"[DEBUG] Using httpx with {num_workers} worker threads")
+            self.logger.debug(f"[DEBUG] Chunk size: {chunk_size} domains per worker")
+            # Show sample domains for verification
+            sample_domains = domains[:5] if len(domains) > 5 else domains
+            self.logger.debug(f"[DEBUG] Sample domains to probe: {', '.join(sample_domains)}")
+            self.logger.debug("[DEBUG] httpx command parameters:")
+            self.logger.debug("[DEBUG] - title: Extract page title")
+            self.logger.debug("[DEBUG] - tech-detect: Identify technologies")
+            self.logger.debug("[DEBUG] - status-code: Get HTTP status code")
+            self.logger.debug("[DEBUG] - content-length: Get content length")
+            self.logger.debug("[DEBUG] - web-server: Identify web server")
+            self.logger.debug("[DEBUG] - timeout 10: 10 second timeout")
+            self.logger.debug("[DEBUG] - retries 2: Retry failed requests")
+        
+        # Function to process a chunk of domains
+        def process_chunk(chunk_domains):
+            # Create a temporary domains file
+            import threading
+            chunk_file = os.path.join(self.output_dir, f"temp_http_{threading.get_ident()}.txt")
+            with open(chunk_file, 'w') as f:
+                for domain in chunk_domains:
+                    f.write(f"{domain}\n")
+            
+            # Run httpx on this chunk
+            chunk_output = os.path.join(self.output_dir, f"temp_http_result_{threading.get_ident()}.json")
+            
+            # Build httpx command with useful options
+            cmd = (
+                f"httpx -l {chunk_file} -json -o {chunk_output} "
+                f"-title -tech-detect -status-code -content-length -web-server "
+                f"-timeout 10 -retries 2 -max-host-error 15 -silent"
+            )
+            
+            try:
+                # Run the command
+                subprocess.run(cmd, shell=True, check=True, capture_output=True, text=True)
+                
+                # Process results if any
+                chunk_results = []
+                if os.path.exists(chunk_output):
+                    with open(chunk_output, 'r') as f:
+                        for line in f:
+                            try:
+                                result = json.loads(line)
+                                chunk_results.append(result)
+                                
+                                # Append to main JSON output file
+                                with open(json_output_file, 'a') as out_f:
+                                    out_f.write(f"{line.strip()}\n")
+                                
+                                # Also write to text file for human reading
+                                with open(output_file, 'a') as out_f:
+                                    url = result.get('url', 'N/A')
+                                    status_code = result.get('status-code', 'N/A')
+                                    title = result.get('title', 'N/A')
+                                    server = result.get('webserver', 'N/A')
+                                    technologies = ', '.join(result.get('technologies', []))
+                                    content_length = result.get('content-length', 'N/A')
+                                    
+                                    out_f.write(f"URL: {url}\n")
+                                    out_f.write(f"Status: {status_code}\n")
+                                    out_f.write(f"Title: {title}\n")
+                                    out_f.write(f"Server: {server}\n")
+                                    out_f.write(f"Technologies: {technologies}\n")
+                                    out_f.write(f"Content Length: {content_length}\n")
+                                    out_f.write("=" * 50 + "\n")
+                            except json.JSONDecodeError:
+                                self.logger.warning(f"Could not parse JSON line: {line}")
+                    
+                    # Clean up
+                    os.remove(chunk_output)
+                
+                os.remove(chunk_file)
+                return chunk_results
+            except Exception as e:
+                self.logger.error(f"Error processing HTTP chunk: {str(e)}")
+                # Clean up any temp files
+                if os.path.exists(chunk_file):
+                    os.remove(chunk_file)
+                if os.path.exists(chunk_output):
+                    os.remove(chunk_output)
+                return []
+        
+        # Process chunks in parallel using ThreadPoolExecutor
+        import concurrent.futures
+        all_http_results = []
+        
+        start_time = time.time()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
+            futures = [executor.submit(process_chunk, chunk) for chunk in chunks]
+            
+            # Process results as they complete
+            for future in concurrent.futures.as_completed(futures):
+                try:
+                    chunk_results = future.result()
+                    all_http_results.extend(chunk_results)
+                    self.logger.debug(f"HTTP chunk processed, found {len(chunk_results)} live services")
+                except Exception as e:
+                    self.logger.error(f"Error in HTTP probing: {str(e)}")
+        
+        # Clean up the temporary domains file
+        if os.path.exists(temp_domains_file):
+            os.remove(temp_domains_file)
+            
+        execution_time = time.time() - start_time
+        self.logger.info(f"HTTP probing completed in {execution_time:.2f}s")
+        
+        # Process and store results in a structured format
+        http_services = []
+        
+        for result in all_http_results:
+            http_service = {
+                'url': result.get('url'),
+                'status_code': result.get('status-code'),
+                'title': result.get('title'),
+                'server': result.get('webserver'),
+                'technologies': result.get('technologies', []),
+                'content_length': result.get('content-length'),
+                'host': result.get('host')
+            }
+            http_services.append(http_service)
+        
+        # Store in results
+        self.results["http_services"] = http_services
+        
+        self.logger.info(f"Found {len(http_services)} active HTTP/HTTPS services")
+        return http_services
+
     def port_scanning(self, targets=None):
         """Scan for open ports on targets."""
         if not self.check_user_confirmation("port scanning"):
@@ -666,6 +852,7 @@ class ReconTool:
         # Execute the rest of the recon pipeline with interactive prompts if enabled
         self.active_subdomain_enumeration()
         self.ip_resolution()
+        self.http_probe()
         self.port_scanning()
         self.vulnerability_scanning()
         
@@ -687,6 +874,34 @@ class ReconTool:
             
             f.write(f"Subdomains found: {len(self.results['subdomains'])}\n")
             f.write(f"IP addresses discovered: {len(self.results['ip_addresses'])}\n")
+            
+            # HTTP services summary
+            http_services_count = len(self.results.get('http_services', []))
+            f.write(f"HTTP services found: {http_services_count}\n")
+            
+            if http_services_count > 0:
+                # Count status codes
+                status_counts = {}
+                for service in self.results.get('http_services', []):
+                    status = service.get('status_code')
+                    if status:
+                        status_key = f"{str(status)[0]}xx"  # Group by first digit
+                        status_counts[status_key] = status_counts.get(status_key, 0) + 1
+                
+                f.write("  Status code breakdown:\n")
+                for status, count in status_counts.items():
+                    f.write(f"    {status}: {count}\n")
+                
+                # Count detected technologies
+                tech_counts = {}
+                for service in self.results.get('http_services', []):
+                    for tech in service.get('technologies', []):
+                        tech_counts[tech] = tech_counts.get(tech, 0) + 1
+                
+                if tech_counts:
+                    f.write("  Top technologies detected:\n")
+                    for tech, count in sorted(tech_counts.items(), key=lambda x: x[1], reverse=True)[:5]:
+                        f.write(f"    {tech}: {count}\n")
             
             total_ports = sum(len(ports) for ports in self.results["open_ports"].values())
             f.write(f"Open ports discovered: {total_ports}\n")
@@ -785,6 +1000,10 @@ class ReconTool:
             background-color: #f0f0f0;
             border-left: 5px solid #9e9e9e;
         }}
+        .status-200 {{ color: green; font-weight: bold; }}
+        .status-30x {{ color: blue; font-weight: bold; }}
+        .status-40x {{ color: orange; font-weight: bold; }}
+        .status-50x {{ color: red; font-weight: bold; }}
     </style>
 </head>
 <body>
@@ -805,6 +1024,10 @@ class ReconTool:
             <tr>
                 <td>IP Addresses Identified</td>
                 <td>{len(self.results['ip_addresses'])}</td>
+            </tr>
+            <tr>
+                <td>HTTP Services Found</td>
+                <td>{len(self.results.get('http_services', []))}</td>
             </tr>
             <tr>
                 <td>Open Ports Found</td>
@@ -831,6 +1054,31 @@ class ReconTool:
             )}
         </table>
         {f'<p>Showing 100 of {len(self.results["subdomains"])} subdomains. See full list in the JSON results.</p>' if len(self.results['subdomains']) > 100 else ''}
+    </div>
+    
+    <div class="container">
+        <h2>HTTP Services</h2>
+        <table>
+            <tr>
+                <th>#</th>
+                <th>URL</th>
+                <th>Status</th>
+                <th>Title</th>
+                <th>Server</th>
+                <th>Technologies</th>
+            </tr>
+            {''.join(
+                f'<tr><td>{i+1}</td>'
+                f'<td><a href="{service.get("url", "#")}" target="_blank">{service.get("url", "N/A")}</a></td>'
+                f'<td class="status-{str(service.get("status_code", "0"))[0]}0x">{service.get("status_code", "N/A")}</td>'
+                f'<td>{service.get("title", "N/A")}</td>'
+                f'<td>{service.get("server", "N/A")}</td>'
+                f'<td>{", ".join(service.get("technologies", []))}</td>'
+                f'</tr>' 
+                for i, service in enumerate(self.results.get("http_services", [])[:100])
+            ) if self.results.get("http_services") else '<tr><td colspan="6">No HTTP services found</td></tr>'}
+        </table>
+        {f'<p>Showing 100 of {len(self.results.get("http_services", []))} HTTP services. See full list in the JSON results.</p>' if len(self.results.get("http_services", [])) > 100 else ''}
     </div>
     
     <div class="container">

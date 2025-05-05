@@ -8,11 +8,16 @@ A modular reconnaissance tool designed for red team engagements. This tool autom
   - Passive enumeration using subfinder
   - Active enumeration using dnsx with wordlists
 - IP resolution and mapping
+- HTTP/HTTPS service detection and analysis:
+  - Web server identification
+  - Status code detection
+  - Page title extraction
+  - Technology stack identification
 - Port scanning
 - Basic vulnerability scanning
 - Results export to JSON and HTML
 - Summary generation
-- Multi-threaded scanning
+- Multi-threaded scanning with optimized performance
 - Interactive mode: Choose which scan phases to run
 - Configuration file support for customization
 
@@ -22,6 +27,7 @@ The tool requires several external utilities that should be installed on your sy
 
 - `subfinder` - for passive subdomain enumeration
 - `dnsx` - for active subdomain enumeration and DNS resolution
+- `httpx` - for HTTP/HTTPS service detection and analysis
 - `nmap` - for port scanning
 - `nuclei` - for vulnerability scanning (optional)
 
@@ -60,6 +66,9 @@ GO111MODULE=on go get -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder
 
 # Install dnsx
 GO111MODULE=on go get -v github.com/projectdiscovery/dnsx/cmd/dnsx
+
+# Install httpx
+GO111MODULE=on go get -v github.com/projectdiscovery/httpx/cmd/httpx
 
 # Install nuclei (optional)
 GO111MODULE=on go get -v github.com/projectdiscovery/nuclei/v2/cmd/nuclei
@@ -165,6 +174,8 @@ All scan results are stored in the `results` directory by default. For each scan
 - `active_enumerated_subdomains.txt` - List of subdomains discovered through active enumeration
 - `ip_addresses.txt` - List of resolved IP addresses
 - `ip_addresses.json` - Raw DNS resolution results from dnsx
+- `http_services.txt` - Human-readable list of HTTP/HTTPS services with titles and technologies
+- `http_services.json` - Detailed HTTP/HTTPS service information in JSON format
 - `nmap_*.xml` - Raw nmap scan results for each IP
 - `results.json` - Complete results in JSON format
 - `report.html` - Comprehensive HTML report
@@ -197,6 +208,7 @@ When running in interactive mode (`-i` flag), the tool will:
 2. Then prompt you before each subsequent scan phase:
    - Active subdomain enumeration
    - IP resolution
+   - HTTP/HTTPS service probing
    - Port scanning
    - Vulnerability scanning
 
