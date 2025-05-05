@@ -1,11 +1,6 @@
 # Results directory
 /results/
 
-# Wordlists (but keep the directory structure)
-wordlists/*.txt
-wordlists/*.lst
-!wordlists/.gitkeep
-
 # Python cache files
 __pycache__/
 *.py[cod]
