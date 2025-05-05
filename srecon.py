@@ -11,6 +11,7 @@ import logging
 import shutil
 import urllib3
 import yaml
+import concurrent.futures
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 
@@ -726,79 +727,117 @@ class ReconTool:
             self.results["open_ports"][ip] = []
             self.results["services"][ip] = {}
         
-        # Use multithreading for parallel scanning of different targets
+        # Determine optimal number of workers based on system resources
+        num_workers = min(os.cpu_count() or 4, 8)  # Limit to 8 workers max
+        
+        # Get scan type and args from config
+        scan_type = self.config.get('port_scan', {}).get('scan_type', "top-1000")
+        additional_args = self.config.get('port_scan', {}).get('additional_args', "-T4")
+        
+        # Determine port range based on scan type
+        if scan_type == "full":
+            port_arg = "-p-"
+        elif scan_type == "top-100":
+            port_arg = "--top-ports 100"
+        else:  # Default to top-1000
+            port_arg = "--top-ports 1000"
+            
+        if self.debug:
+            self.logger.debug(f"[DEBUG] Port scanning with {num_workers} worker threads")
+            self.logger.debug(f"[DEBUG] Scan type: {scan_type} ({port_arg})")
+            self.logger.debug(f"[DEBUG] Additional args: {additional_args}")
+            self.logger.debug(f"[DEBUG] Targets: {', '.join(targets[:5])}{' and more' if len(targets) > 5 else ''}")
+            
+        # Use ThreadPoolExecutor for parallel scanning of different targets
+        start_time = time.time()
+        port_scan_results = []
+        
+        self.logger.info(f"Scanning {len(targets)} targets with {num_workers} workers")
+        
+        # Function to scan a single target
         def scan_target(ip):
             """Scan a single target for open ports"""
             self.logger.debug(f"Scanning ports for: {ip}")
             output_file = os.path.join(self.output_dir, f"nmap_{ip.replace('.', '_')}.xml")
             
-            # Get scan type from config
-            scan_type = self.config.get('port_scan', {}).get('scan_type', "top-1000")
-            additional_args = self.config.get('port_scan', {}).get('additional_args', "-T4")
-            
-            # Determine port range based on scan type
-            if scan_type == "full":
-                port_arg = "-p-"
-            elif scan_type == "top-100":
-                port_arg = "--top-ports 100"
-            else:  # Default to top-1000
-                port_arg = "--top-ports 1000"
-            
             # Run nmap scan 
-            command = f"nmap -sV {port_arg} {additional_args} {ip} -oX {output_file}"
-            self.run_command(command, f"Port scanning for {ip}")
+            cmd = f"nmap -sV {port_arg} {additional_args} {ip} -oX {output_file}"
             
-            result = {"ip": ip, "ports": [], "services": {}}
-            
-            # Parse results using proper XML handling
-            if os.path.exists(output_file):
-                try:
-                    import xml.etree.ElementTree as ET
-                    tree = ET.parse(output_file)
-                    root = tree.getroot()
-                    
-                    # Find all ports with state "open"
-                    for port in root.findall(".//port"):
-                        state = port.find("state")
-                        if state is not None and state.get("state") == "open":
-                            port_id = port.get("portid")
-                            result["ports"].append(port_id)
-                            
-                            # Get service information
-                            service = port.find("service")
-                            if service is not None:
-                                service_name = service.get("name", "unknown")
-                                product = service.get("product", "")
-                                version = service.get("version", "")
+            try:
+                # Run the command
+                subprocess.run(cmd, shell=True, check=True, capture_output=True, text=True)
+                
+                result = {"ip": ip, "ports": [], "services": {}}
+                
+                # Parse results using proper XML handling
+                if os.path.exists(output_file):
+                    try:
+                        import xml.etree.ElementTree as ET
+                        tree = ET.parse(output_file)
+                        root = tree.getroot()
+                        
+                        # Find all ports with state "open"
+                        for port in root.findall(".//port"):
+                            state = port.find("state")
+                            if state is not None and state.get("state") == "open":
+                                port_id = port.get("portid")
+                                result["ports"].append(port_id)
                                 
-                                service_info = service_name
-                                if product:
-                                    service_info += f" ({product}"
-                                    if version:
-                                        service_info += f" {version}"
-                                    service_info += ")"
-                                
-                                result["services"][port_id] = service_info
-                except Exception as e:
-                    self.logger.error(f"Error parsing nmap results for {ip}: {str(e)}")
-            
-            return result
+                                # Get service information
+                                service = port.find("service")
+                                if service is not None:
+                                    service_name = service.get("name", "unknown")
+                                    product = service.get("product", "")
+                                    version = service.get("version", "")
+                                    
+                                    service_info = service_name
+                                    if product:
+                                        service_info += f" ({product}"
+                                        if version:
+                                            service_info += f" {version}"
+                                        service_info += ")"
+                                    
+                                    result["services"][port_id] = service_info
+                        
+                        # Count the open ports found
+                        port_count = len(result["ports"])
+                        self.logger.info(f"Found {port_count} open ports on {ip}")
+                        
+                        return result
+                    except Exception as e:
+                        self.logger.error(f"Error parsing nmap results for {ip}: {str(e)}")
+                        return {"ip": ip, "ports": [], "services": {}, "error": str(e)}
+                else:
+                    self.logger.warning(f"No output file found for {ip}")
+                    return {"ip": ip, "ports": [], "services": {}, "error": "No output file found"}
+            except Exception as e:
+                self.logger.error(f"Error scanning {ip}: {str(e)}")
+                return {"ip": ip, "ports": [], "services": {}, "error": str(e)}
         
         # Use ThreadPoolExecutor for parallel scanning
-        with ThreadPoolExecutor(max_workers=min(self.threads, len(targets))) as executor:
-            scan_results = list(executor.map(scan_target, targets))
-        
-        # Consolidate results
-        for result in scan_results:
-            ip = result["ip"]
-            self.results["open_ports"][ip] = result["ports"]
-            self.results["services"][ip] = result["services"]
+        with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
+            # Submit all tasks and get futures
+            futures = {executor.submit(scan_target, ip): ip for ip in targets}
             
-            port_count = len(result["ports"])
-            self.logger.info(f"Found {port_count} open ports on {ip}")
+            # Process results as they complete
+            for future in concurrent.futures.as_completed(futures):
+                ip = futures[future]
+                try:
+                    result = future.result()
+                    if "error" not in result:
+                        # Update results
+                        self.results["open_ports"][ip] = result["ports"]
+                        self.results["services"][ip] = result["services"]
+                        port_scan_results.append(result)
+                except Exception as e:
+                    self.logger.error(f"Error in port scanning for {ip}: {str(e)}")
+        
+        execution_time = time.time() - start_time
+        self.logger.info(f"Port scanning completed in {execution_time:.2f}s")
         
         total_ports = sum(len(ports) for ports in self.results["open_ports"].values())
-        self.logger.info(f"Port scanning completed. Found {total_ports} open ports across {len(targets)} targets.")
+        self.logger.info(f"Found {total_ports} open ports across {len(targets)} targets.")
+        
         return self.results["open_ports"]
 
     def vulnerability_scanning(self):
