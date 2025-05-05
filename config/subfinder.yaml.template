@@ -1,0 +1,65 @@
+# Subfinder configuration file
+# Copy this file to subfinder.yaml and add your API keys
+
+# API Keys for various services (replace with your actual keys)
+# Sources marked with * require API keys
+
+# Sources requiring API keys
+bevigil:
+  - <api key>
+binaryedge:
+  - <api key>
+bufferover:
+  - <api key>
+c99:
+  - <api key>
+censys:
+  - <censys api id:censys api secret>
+certspotter:
+  - <api key>
+chaos:
+  - <api key>
+dnsdb:
+  - <api key>
+dnsdumpster:
+  - <api key>
+dnsrepo:
+  - <api key>
+fofa:
+  - <fofa email:fofa api key>
+fullhunt:
+  - <api key>
+github:
+  - <api key>
+hunter:
+  - <api key>
+intelx:
+  - <api key>
+netlas:
+  - <api key>
+leakix:
+  - <api key>
+quake:
+  - <api key>
+redhuntlabs:
+  - <api key>
+robtex:
+  - <api key>
+securitytrails:
+  - <api key>
+shodan:
+  - <api key>
+threatbook:
+  - <api key>
+virustotal:
+  - <api key>
+whoisxmlapi:
+  - <api key>
+zoomeye:
+  - <api key>
+facebook:
+  - <api key>
+builtwith:
+  - <api key>
+digitalyama:
+  - <api key>

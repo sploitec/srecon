@@ -26,7 +26,13 @@ var/
 # Configuration files
 *.config
 *.ini
-config.json
+config/*.yaml
+config/*.yml
+config/*.json
+config/*.conf
+config/*.cfg
+# But allow template files
+!config/*.template
 
 # Logs
 *.log

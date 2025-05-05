@@ -127,7 +127,15 @@ class ReconTool:
         
         # Example using subfinder (you can replace this with your preferred tool)
         output_file = os.path.join(self.output_dir, "subdomains.txt")
-        command = f"subfinder -d {self.target} -o {output_file}"
+        
+        # Check if config file exists
+        config_file = os.path.join("config", "subfinder.yaml")
+        config_param = ""
+        if os.path.exists(config_file):
+            self.logger.info(f"Using subfinder config file: {config_file}")
+            config_param = f"-config {config_file}"
+        
+        command = f"subfinder -d {self.target} {config_param} -o {output_file}"
         self.run_command(command, "Subdomain enumeration")
         
         # Read and store results
@@ -493,17 +501,6 @@ class ReconTool:
             f'</div>'
             for v in self.results["vulnerabilities"]
         ) if self.results["vulnerabilities"] else '<p>No vulnerabilities detected.</p>'}
-    </div>
-    
-    <div class="container">
-        <h2>Recommendations</h2>
-        <ul>
-            <li>Review all open ports and services, disable unnecessary services</li>
-            <li>Implement proper access controls for all exposed services</li>
-            <li>Address identified vulnerabilities based on severity</li>
-            <li>Consider implementing a web application firewall (WAF)</li>
-            <li>Regularly scan for new vulnerabilities and misconfigurations</li>
-        </ul>
     </div>
     
     <footer>
