@@ -70,21 +70,25 @@ cp config/subfinder.yaml.template config/subfinder.yaml
 ### Basic usage:
 
 ```bash
-python srecon.py example.com
+# Scan a single domain
+python srecon.py -d example.com
+
+# Scan multiple domains from a file
+python srecon.py -f domains.txt
 ```
 
 ### Options:
 
 ```
-usage: srecon.py [-h] [-o OUTPUT] [-t THREADS] [-v] target
+usage: srecon.py [-h] (-d DOMAIN | -f FILE) [-o OUTPUT] [-t THREADS] [-v]
 
 Automated Reconnaissance Tool for Red Teaming
 
-positional arguments:
-  target                Target domain or IP address
-
 optional arguments:
   -h, --help            show this help message and exit
+  -d DOMAIN, --domain DOMAIN
+                        Target domain or IP address
+  -f FILE, --file FILE  File containing list of targets (one per line)
   -o OUTPUT, --output OUTPUT
                         Custom output directory (default: results/target_timestamp)
   -t THREADS, --threads THREADS
@@ -95,14 +99,17 @@ optional arguments:
 ### Examples:
 
 ```bash
-# Perform a complete scan with 10 threads
-python srecon.py example.com -t 10
+# Scan a single domain with 10 threads
+python srecon.py -d example.com -t 10
 
 # Specify custom output directory
-python srecon.py example.com -o custom_output_dir
+python srecon.py -d example.com -o custom_output_dir
 
 # Enable verbose output
-python srecon.py example.com -v
+python srecon.py -d example.com -v
+
+# Scan multiple domains from a file
+python srecon.py -f domains.txt -t 8
 ```
 
 ## Output

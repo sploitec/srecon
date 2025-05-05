@@ -29,7 +29,14 @@ class ReconTool:
         
         # Set up output directory
         if output_dir:
-            self.output_dir = output_dir
+            # For custom output directory, create a subdirectory for each target
+            if os.path.exists(output_dir) and os.path.isdir(output_dir):
+                # If output_dir exists and it's a directory, create a subdirectory for the target
+                target_dir = target.replace(':', '_').replace('/', '_').replace('\\', '_')
+                self.output_dir = os.path.join(output_dir, target_dir)
+            else:
+                # If output_dir doesn't exist or isn't a directory, use it directly
+                self.output_dir = output_dir
         else:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             self.output_dir = os.path.join("results", f"{self.target}_{timestamp}")
@@ -155,6 +162,8 @@ class ReconTool:
             domains = [self.target]
         
         ip_dict = {}
+        # Track which domains resolve to which IPs
+        ip_to_domains = {}
         output_file = os.path.join(self.output_dir, "ip_addresses.txt")
         
         def resolve_domain(domain):
@@ -177,16 +186,28 @@ class ReconTool:
         # Consolidate results
         for result in results:
             ip_dict.update(result)
-            for ips in result.values():
-                    self.results["ip_addresses"].extend(ips)
+            for domain, ips in result.items():
+                for ip in ips:
+                    self.results["ip_addresses"].append(ip)
+                    # Map IP to domains
+                    if ip not in ip_to_domains:
+                        ip_to_domains[ip] = []
+                    ip_to_domains[ip].append(domain)
         
         # Remove duplicates
         self.results["ip_addresses"] = list(set(self.results["ip_addresses"]))
+        
+        # Store the IP to domains mapping in results
+        self.results["ip_to_domains"] = ip_to_domains
         
         # Save to file
         with open(output_file, 'w') as f:
             for domain, ips in ip_dict.items():
                 f.write(f"{domain}: {', '.join(ips)}\n")
+            
+            f.write("\n\n# IP Addresses with associated subdomains:\n")
+            for ip, domains in ip_to_domains.items():
+                f.write(f"{ip}: {', '.join(domains)}\n")
         
         self.logger.info(f"Resolved {len(self.results['ip_addresses'])} unique IP addresses")
         return self.results["ip_addresses"]
@@ -468,8 +489,12 @@ class ReconTool:
             <tr>
                 <th>#</th>
                 <th>IP Address</th>
+                <th>Associated Subdomains</th>
             </tr>
-            {''.join(f'<tr><td>{i+1}</td><td>{ip}</td></tr>' for i, ip in enumerate(self.results['ip_addresses'][:100]))}
+            {''.join(
+                f'<tr><td>{i+1}</td><td>{ip}</td><td>{", ".join(self.results.get("ip_to_domains", {}).get(ip, []))}</td></tr>' 
+                for i, ip in enumerate(self.results['ip_addresses'][:100])
+            )}
         </table>
         {f'<p>Showing 100 of {len(self.results["ip_addresses"])} IP addresses. See full list in the JSON results.</p>' if len(self.results['ip_addresses']) > 100 else ''}
     </div>
@@ -520,49 +545,84 @@ class ReconTool:
 def main():
     """Main entry point for the recon tool."""
     parser = argparse.ArgumentParser(description="Automated Reconnaissance Tool for Red Teaming")
-    parser.add_argument("target", help="Target domain or IP address")
+    
+    # Define target input group (mutually exclusive)
+    target_group = parser.add_mutually_exclusive_group(required=True)
+    target_group.add_argument("-d", "--domain", help="Target domain or IP address")
+    target_group.add_argument("-f", "--file", help="File containing list of targets (one per line)")
+    
+    # Other arguments
     parser.add_argument("-o", "--output", help="Custom output directory (default: results/target_timestamp)")
     parser.add_argument("-t", "--threads", type=int, default=5, help="Number of threads to use")
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output")
     
     args = parser.parse_args()
     
-    # Initialize the recon tool
-    recon = ReconTool(
-        target=args.target,
-        output_dir=args.output,
-        threads=args.threads,
-        verbose=args.verbose
-    )
+    # Get targets
+    targets = []
+    if args.domain:
+        targets = [args.domain]
+    elif args.file:
+        if not os.path.exists(args.file):
+            print(f"Error: Target file {args.file} not found.")
+            sys.exit(1)
+        with open(args.file, 'r') as f:
+            targets = [line.strip() for line in f if line.strip()]
+    
+    if not targets:
+        print("Error: No valid targets specified.")
+        sys.exit(1)
     
     # Print banner
     try:
         from pyfiglet import Figlet
         print(Figlet(font='slant').renderText('Sploitec Recon'))
-        print(f"Target: {args.target}\n")
+        if len(targets) == 1:
+            print(f"Target: {targets[0]}\n")
+        else:
+            print(f"Targets: {len(targets)} domains from {args.file}\n")
     except ImportError:
         print("=" * 50)
         print("Sploitec Recon Tool")
         print("=" * 50)
-        print(f"Target: {args.target}\n")
-    
-    # Run the recon pipeline
-    try:
-        recon.run_recon()
-        
-        output_file = os.path.join(recon.output_dir, "results.json")
-        print(f"\nReconnaissance completed!")
-        print(f"Results saved to: {output_file}")
-        print(f"HTML report: {os.path.join(recon.output_dir, 'report.html')}")
+        if len(targets) == 1:
+            print(f"Target: {targets[0]}\n")
+        else:
+            print(f"Targets: {len(targets)} domains from {args.file}\n")
             
-    except KeyboardInterrupt:
-        recon.logger.warning("Reconnaissance interrupted by user")
-        recon.save_results()
-        print("\nRecon interrupted. Partial results saved.")
-    except Exception as e:
-        recon.logger.error(f"Error during reconnaissance: {str(e)}")
-        print(f"\nAn error occurred: {str(e)}")
-        recon.save_results()
+    # Run the recon for each target
+    for target in targets:
+        print(f"\n{'=' * 30}\nProcessing target: {target}\n{'=' * 30}\n")
+        
+        # Initialize the recon tool for this target
+        recon = ReconTool(
+            target=target,
+            output_dir=args.output,
+            threads=args.threads,
+            verbose=args.verbose
+        )
+        
+        # Run the recon pipeline
+        try:
+            recon.run_recon()
+            
+            output_file = os.path.join(recon.output_dir, "results.json")
+            print(f"\nReconnaissance completed for {target}!")
+            print(f"Results saved to: {output_file}")
+            print(f"HTML report: {os.path.join(recon.output_dir, 'report.html')}")
+                
+        except KeyboardInterrupt:
+            recon.logger.warning("Reconnaissance interrupted by user")
+            recon.save_results()
+            print("\nRecon interrupted. Partial results saved.")
+            break  # Exit the loop if user interrupts
+        except Exception as e:
+            recon.logger.error(f"Error during reconnaissance: {str(e)}")
+            print(f"\nAn error occurred: {str(e)}")
+            recon.save_results()
+            
+    if len(targets) > 1:
+        print(f"\nAll {len(targets)} targets processed. Results saved in individual directories.")
         
 if __name__ == "__main__":
     main()
