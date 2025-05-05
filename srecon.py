@@ -841,39 +841,31 @@ class ReconTool:
         return self.results["open_ports"]
 
     def vulnerability_scanning(self):
-        """Basic vulnerability scanning."""
+        """Basic vulnerability scanning - currently disabled."""
         if not self.check_user_confirmation("vulnerability scanning"):
             self.logger.info("Skipping vulnerability scanning")
             return []
             
-        self.logger.info("Starting vulnerability scanning")
+        self.logger.info("Vulnerability scanning is currently disabled")
+        self.logger.info("The tool will not perform any vulnerability scanning")
         
-        # Example of what this might look like with Nuclei
-        for domain in self.results["subdomains"] or [self.target]:
-            output_file = os.path.join(self.output_dir, f"nuclei_{domain.replace('.', '_')}.json")
-            command = f"nuclei -u {domain} -o {output_file} -json"
-            self.run_command(command, f"Vulnerability scanning for {domain}")
-            
-            # Parse results (simplified)
-            if os.path.exists(output_file):
-                try:
-                    with open(output_file, 'r') as f:
-                        for line in f:
-                            try:
-                                vuln = json.loads(line)
-                                self.results["vulnerabilities"].append({
-                                    "target": domain,
-                                    "name": vuln.get("info", {}).get("name", "Unknown"),
-                                    "severity": vuln.get("info", {}).get("severity", "Unknown"),
-                                    "description": vuln.get("info", {}).get("description", "No description")
-                                })
-                            except json.JSONDecodeError:
-                                continue
-                except Exception as e:
-                    self.logger.error(f"Error parsing vulnerability results: {str(e)}")
+        # Create an empty vulnerabilities list
+        vulnerabilities = []
         
-        self.logger.info(f"Found {len(self.results['vulnerabilities'])} potential vulnerabilities")
-        return self.results["vulnerabilities"]
+        # Store in results
+        self.results["vulnerabilities"] = vulnerabilities
+        
+        # Create a simple summary file
+        summary_file = os.path.join(self.output_dir, "vulnerability_summary.txt")
+        with open(summary_file, 'w') as f:
+            f.write(f"Vulnerability Scanning Summary for {self.target}\n")
+            f.write(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+            f.write("Vulnerability scanning is currently disabled.\n")
+            f.write("No vulnerabilities were scanned for this target.\n")
+        
+        self.logger.info(f"Vulnerability summary saved to {summary_file}")
+        
+        return vulnerabilities
 
     def run_recon(self):
         """Run the complete recon pipeline."""
@@ -1039,10 +1031,119 @@ class ReconTool:
             background-color: #f0f0f0;
             border-left: 5px solid #9e9e9e;
         }}
+        .unknown {{
+            background-color: #f5f5f5;
+            border-left: 5px solid #9e9e9e;
+        }}
         .status-200 {{ color: green; font-weight: bold; }}
         .status-30x {{ color: blue; font-weight: bold; }}
         .status-40x {{ color: orange; font-weight: bold; }}
         .status-50x {{ color: red; font-weight: bold; }}
+        .vuln-count {{ font-weight: bold; }}
+        .critical-count {{ color: #f44336; }}
+        .high-count {{ color: #ff9800; }}
+        .medium-count {{ color: #ffc107; }}
+        .low-count {{ color: #03a9f4; }}
+        .info-count {{ color: #9e9e9e; }}
+        .tabs {{
+            overflow: hidden;
+            border: 1px solid #ccc;
+            background-color: #f1f1f1;
+            border-radius: 5px 5px 0 0;
+        }}
+        .tabs button {{
+            background-color: inherit;
+            float: left;
+            border: none;
+            outline: none;
+            cursor: pointer;
+            padding: 14px 16px;
+            transition: 0.3s;
+            font-size: 17px;
+        }}
+        .tabs button:hover {{
+            background-color: #ddd;
+        }}
+        .tabs button.active {{
+            background-color: #fff;
+            border-bottom: 2px solid #2c3e50;
+        }}
+        .tabcontent {{
+            display: none;
+            padding: 6px 12px;
+            border: 1px solid #ccc;
+            border-top: none;
+            border-radius: 0 0 5px 5px;
+            animation: fadeEffect 1s;
+        }}
+        @keyframes fadeEffect {{
+            from {{opacity: 0;}}
+            to {{opacity: 1;}}
+        }}
+        .reference-link {{
+            display: block;
+            margin: 5px 0;
+            word-break: break-all;
+        }}
+        .badge {{
+            display: inline-block;
+            padding: 3px 7px;
+            font-size: 12px;
+            font-weight: bold;
+            line-height: 1;
+            text-align: center;
+            white-space: nowrap;
+            vertical-align: baseline;
+            border-radius: 10px;
+            margin-right: 5px;
+            margin-bottom: 5px;
+        }}
+        .badge-cve {{
+            background-color: #d9534f;
+            color: white;
+        }}
+        .badge-tech {{
+            background-color: #5bc0de;
+            color: white;
+        }}
+        .badge-misc {{
+            background-color: #777;
+            color: white;
+        }}
+        .collapsible {{
+            background-color: #f2f2f2;
+            color: #444;
+            cursor: pointer;
+            padding: 18px;
+            width: 100%;
+            text-align: left;
+            outline: none;
+            font-size: 15px;
+            border: none;
+            border-radius: 5px;
+            margin-bottom: 2px;
+        }}
+        .active-collapsible, .collapsible:hover {{
+            background-color: #e6e6e6;
+        }}
+        .collapsible:after {{
+            content: '\\002B';
+            color: #777;
+            font-weight: bold;
+            float: right;
+            margin-left: 5px;
+        }}
+        .active-collapsible:after {{
+            content: '\\2212';
+        }}
+        .collapse-content {{
+            padding: 0 18px;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.2s ease-out;
+            background-color: #f9f9f9;
+            border-radius: 0 0 5px 5px;
+        }}
     </style>
 </head>
 <body>
@@ -1074,12 +1175,40 @@ class ReconTool:
             </tr>
             <tr>
                 <td>Vulnerabilities Detected</td>
-                <td>{len(self.results['vulnerabilities'])}</td>
+                <td>"""
+        
+        # Count vulnerabilities by severity
+        vuln_counts = {'critical': 0, 'high': 0, 'medium': 0, 'low': 0, 'info': 0, 'unknown': 0}
+        for vuln in self.results.get('vulnerabilities', []):
+            severity = vuln.get('severity', 'unknown').lower()
+            if severity in vuln_counts:
+                vuln_counts[severity] += 1
+            else:
+                vuln_counts['unknown'] += 1
+        
+        total_vulns = sum(vuln_counts.values())
+        
+        html_template += f"""
+                <span class="vuln-count">{total_vulns}</span> (
+                <span class="critical-count">{vuln_counts['critical']} Critical</span>, 
+                <span class="high-count">{vuln_counts['high']} High</span>, 
+                <span class="medium-count">{vuln_counts['medium']} Medium</span>, 
+                <span class="low-count">{vuln_counts['low']} Low</span>, 
+                <span class="info-count">{vuln_counts['info']} Info</span>)
+                </td>
             </tr>
         </table>
     </div>
     
-    <div class="container">
+    <div class="tabs">
+        <button class="tablinks" onclick="openTab(event, 'Subdomains')" id="defaultOpen">Subdomains</button>
+        <button class="tablinks" onclick="openTab(event, 'HTTP')">HTTP Services</button>
+        <button class="tablinks" onclick="openTab(event, 'IPs')">IP Addresses</button>
+        <button class="tablinks" onclick="openTab(event, 'Ports')">Ports & Services</button>
+        <button class="tablinks" onclick="openTab(event, 'Vulnerabilities')">Vulnerabilities</button>
+    </div>
+    
+    <div id="Subdomains" class="tabcontent">
         <h2>Subdomains</h2>
         <table>
             <tr>
@@ -1095,7 +1224,7 @@ class ReconTool:
         {f'<p>Showing 100 of {len(self.results["subdomains"])} subdomains. See full list in the JSON results.</p>' if len(self.results['subdomains']) > 100 else ''}
     </div>
     
-    <div class="container">
+    <div id="HTTP" class="tabcontent">
         <h2>HTTP Services</h2>
         <table>
             <tr>
@@ -1120,7 +1249,7 @@ class ReconTool:
         {f'<p>Showing 100 of {len(self.results.get("http_services", []))} HTTP services. See full list in the JSON results.</p>' if len(self.results.get("http_services", [])) > 100 else ''}
     </div>
     
-    <div class="container">
+    <div id="IPs" class="tabcontent">
         <h2>IP Addresses</h2>
         <table>
             <tr>
@@ -1136,7 +1265,7 @@ class ReconTool:
         {f'<p>Showing 100 of {len(self.results["ip_addresses"])} IP addresses. See full list in the JSON results.</p>' if len(self.results['ip_addresses']) > 100 else ''}
     </div>
     
-    <div class="container">
+    <div id="Ports" class="tabcontent">
         <h2>Open Ports & Services</h2>
         <table>
             <tr>
@@ -1152,22 +1281,166 @@ class ReconTool:
         </table>
     </div>
     
-    <div class="container">
+    <div id="Vulnerabilities" class="tabcontent">
         <h2>Vulnerabilities</h2>
-        {''.join(
-            f'<div class="vulnerability {v.get("severity", "").lower()}">'
-            f'<h3>{v.get("name", "Unknown Vulnerability")}</h3>'
-            f'<p><strong>Target:</strong> {v.get("target", "Unknown")}</p>'
-            f'<p><strong>Severity:</strong> {v.get("severity", "Unknown")}</p>'
-            f'<p><strong>Description:</strong> {v.get("description", "No description available")}</p>'
-            f'</div>'
-            for v in self.results["vulnerabilities"]
-        ) if self.results["vulnerabilities"] else '<p>No vulnerabilities detected.</p>'}
+        
+        <div class="container">
+            <h3>Vulnerability Summary</h3>
+            <table>
+                <tr>
+                    <th>Severity</th>
+                    <th>Count</th>
+                </tr>
+                <tr>
+                    <td><span class="badge critical">Critical</span></td>
+                    <td>{vuln_counts['critical']}</td>
+                </tr>
+                <tr>
+                    <td><span class="badge high">High</span></td>
+                    <td>{vuln_counts['high']}</td>
+                </tr>
+                <tr>
+                    <td><span class="badge medium">Medium</span></td>
+                    <td>{vuln_counts['medium']}</td>
+                </tr>
+                <tr>
+                    <td><span class="badge low">Low</span></td>
+                    <td>{vuln_counts['low']}</td>
+                </tr>
+                <tr>
+                    <td><span class="badge info">Info</span></td>
+                    <td>{vuln_counts['info']}</td>
+                </tr>
+            </table>
+        </div>
+        
+        <!-- Filter buttons for vulnerabilities -->
+        <div style="margin-bottom: 15px;">
+            <button class="tablinks" onclick="filterVulns('all')">All</button>
+            <button class="tablinks" onclick="filterVulns('critical')">Critical</button>
+            <button class="tablinks" onclick="filterVulns('high')">High</button>
+            <button class="tablinks" onclick="filterVulns('medium')">Medium</button>
+            <button class="tablinks" onclick="filterVulns('low')">Low</button>
+            <button class="tablinks" onclick="filterVulns('info')">Info</button>
+        </div>
+"""
+        
+        # Group vulnerabilities by severity for better display
+        for severity in ['critical', 'high', 'medium', 'low', 'info', 'unknown']:
+            severity_vulns = [v for v in self.results.get('vulnerabilities', []) if v.get('severity', '').lower() == severity]
+            
+            if severity_vulns:
+                html_template += f"""
+        <div class="vulnerability-group" id="vuln-group-{severity}">
+            <h3>{severity.capitalize()} Severity Vulnerabilities ({len(severity_vulns)})</h3>
+"""
+                
+                # Add each vulnerability as a collapsible section
+                for i, vuln in enumerate(severity_vulns):
+                    # Create tags/badges
+                    tags_html = ""
+                    if vuln.get('tags'):
+                        for tag in vuln.get('tags', []):
+                            badge_class = "badge-misc"
+                            if "cve" in tag.lower():
+                                badge_class = "badge-cve"
+                            elif any(tech in tag.lower() for tech in ["php", "wordpress", "apache", "nginx", "iis", "tomcat"]):
+                                badge_class = "badge-tech"
+                            tags_html += f'<span class="badge {badge_class}">{tag}</span>'
+                    
+                    # References links
+                    ref_html = ""
+                    if vuln.get('references'):
+                        refs = vuln.get('references')
+                        if isinstance(refs, list):
+                            for ref in refs:
+                                ref_html += f'<a href="{ref}" target="_blank" class="reference-link">{ref}</a>'
+                        else:
+                            ref_html += f'<a href="{refs}" target="_blank" class="reference-link">{refs}</a>'
+                    
+                    html_template += f"""
+                <button class="collapsible">{vuln.get('name', 'Unknown Vulnerability')} - {vuln.get('target', 'Unknown')}</button>
+                <div class="collapse-content">
+                    <div class="vulnerability {severity}">
+                        <h4>{vuln.get('name', 'Unknown Vulnerability')}</h4>
+                        <p><strong>Target:</strong> {vuln.get('target', 'Unknown')}</p>
+                        <p><strong>Severity:</strong> {severity.capitalize()}</p>
+                        <p><strong>Template ID:</strong> {vuln.get('template_id', 'Unknown')}</p>
+                        <p><strong>Matched at:</strong> {vuln.get('matched_at', 'Unknown')}</p>
+                        <p><strong>Tags:</strong> {tags_html or 'None'}</p>
+                        <p><strong>Description:</strong> {vuln.get('description', 'No description available')}</p>
+                        {f'<p><strong>References:</strong></p>{ref_html}' if ref_html else ''}
+                    </div>
+                </div>
+"""
+                
+                html_template += """
+        </div>
+"""
+        
+        # If no vulnerabilities found
+        if not self.results.get('vulnerabilities'):
+            html_template += '<p>No vulnerabilities detected.</p>'
+        
+        html_template += """
     </div>
     
     <footer>
         <p>Generated by Sploitec Recon Tool</p>
     </footer>
+    
+    <script>
+    function openTab(evt, tabName) {
+        var i, tabcontent, tablinks;
+        tabcontent = document.getElementsByClassName("tabcontent");
+        for (i = 0; i < tabcontent.length; i++) {
+            tabcontent[i].style.display = "none";
+        }
+        tablinks = document.getElementsByClassName("tablinks");
+        for (i = 0; i < tablinks.length; i++) {
+            tablinks[i].className = tablinks[i].className.replace(" active", "");
+        }
+        document.getElementById(tabName).style.display = "block";
+        evt.currentTarget.className += " active";
+    }
+    
+    // Get the element with id="defaultOpen" and click on it
+    document.getElementById("defaultOpen").click();
+    
+    // Add functionality to collapsible elements
+    var coll = document.getElementsByClassName("collapsible");
+    var i;
+    
+    for (i = 0; i < coll.length; i++) {
+      coll[i].addEventListener("click", function() {
+        this.classList.toggle("active-collapsible");
+        var content = this.nextElementSibling;
+        if (content.style.maxHeight){
+          content.style.maxHeight = null;
+        } else {
+          content.style.maxHeight = content.scrollHeight + "px";
+        } 
+      });
+    }
+    
+    // Filter vulnerabilities by severity
+    function filterVulns(severity) {
+        var groups = document.getElementsByClassName("vulnerability-group");
+        if (severity === 'all') {
+            for (var i = 0; i < groups.length; i++) {
+                groups[i].style.display = "block";
+            }
+        } else {
+            for (var i = 0; i < groups.length; i++) {
+                if (groups[i].id === "vuln-group-" + severity) {
+                    groups[i].style.display = "block";
+                } else {
+                    groups[i].style.display = "none";
+                }
+            }
+        }
+    }
+    </script>
 </body>
 </html>
 """
