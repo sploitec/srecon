@@ -1,0 +1,25 @@
+# Sploitec Recon (srecon) Configuration Template
+# Copy this file to config.yaml and modify as needed
+
+# General settings
+general:
+  # Default number of threads to use
+  threads: 5
+  # Enable verbose output by default
+  verbose: false
+  # Interactive mode: prompt before each scan phase
+  interactive: false
+  # Debug mode - provides detailed timing and command execution info
+  debug: false
+
+# Subdomain enumeration settings
+subdomain_enumeration:
+  # Path to active enumeration wordlist (relative to the tool directory)
+  wordlist: "wordlists/subdomains_top5000.txt"
+
+# Port scanning settings
+port_scan:
+  # Port scan type: full, top-1000, top-100
+  scan_type: "top-1000"
+  # Additional nmap arguments
+  additional_args: "-T4" 

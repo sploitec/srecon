@@ -10,6 +10,7 @@ import time
 import logging
 import shutil
 import urllib3
+import yaml
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 
@@ -17,11 +18,37 @@ from concurrent.futures import ThreadPoolExecutor
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 class ReconTool:
-    def __init__(self, target, output_dir=None, threads=5, verbose=False):
+    def __init__(self, target, output_dir=None, threads=5, verbose=False, interactive=False, debug=False):
         """Initialize the recon tool with target and parameters."""
         self.target = target
         self.threads = threads
         self.verbose = verbose
+        self.interactive = interactive
+        self.debug = debug
+        
+        # Load configuration
+        self.config = self.load_config()
+        
+        # Override config with command line arguments if provided
+        if threads:
+            self.threads = threads
+        elif self.config.get('general', {}).get('threads'):
+            self.threads = self.config['general']['threads']
+            
+        if verbose:
+            self.verbose = verbose
+        elif self.config.get('general', {}).get('verbose') is not None:
+            self.verbose = self.config['general']['verbose']
+            
+        if interactive:
+            self.interactive = interactive
+        elif self.config.get('general', {}).get('interactive') is not None:
+            self.interactive = self.config['general']['interactive']
+            
+        if debug:
+            self.debug = debug
+        elif self.config.get('general', {}).get('debug') is not None:
+            self.debug = self.config['general']['debug']
         
         # Create results directory if it doesn't exist
         if not os.path.exists("results"):
@@ -46,7 +73,7 @@ class ReconTool:
             os.makedirs(self.output_dir)
         
         # Set up logging
-        log_level = logging.DEBUG if verbose else logging.INFO
+        log_level = logging.DEBUG if self.verbose else logging.INFO
         logging.basicConfig(
             level=log_level,
             format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -72,6 +99,36 @@ class ReconTool:
         
         # Check dependencies
         self.check_dependencies()
+
+    def load_config(self):
+        """Load configuration from YAML file."""
+        config_path = "config.yaml"
+        default_config = {
+            "general": {
+                "threads": 5,
+                "verbose": False,
+                "interactive": False,
+                "debug": False
+            },
+            "subdomain_enumeration": {
+                "wordlist": "wordlists/subdomains_top5000.txt"
+            },
+            "port_scan": {
+                "scan_type": "top-1000",
+                "additional_args": "-T4"
+            }
+        }
+        
+        if os.path.exists(config_path):
+            try:
+                with open(config_path, 'r') as f:
+                    config = yaml.safe_load(f)
+                    if config:
+                        return config
+            except Exception as e:
+                print(f"Error loading config file: {str(e)}")
+        
+        return default_config
 
     def check_dependencies(self):
         """Check if required external tools are installed."""
@@ -99,16 +156,36 @@ class ReconTool:
 
     def run_command(self, command, description):
         """Run a shell command and return its output."""
-        self.logger.debug(f"Running command: {command}")
+        if self.debug:
+            self.logger.debug(f"[DEBUG] Running command: {command}")
+            
         start_time = time.time()
+        
         try:
+            if self.debug:
+                process_start_time = time.time()
+                self.logger.debug(f"[DEBUG] Process creation started at: {process_start_time - start_time:.6f}s")
+            
             result = subprocess.run(
                 command,
                 shell=True,
                 text=True,
                 capture_output=True
             )
+            
             execution_time = time.time() - start_time
+            
+            if self.debug:
+                self.logger.debug(f"[DEBUG] Process execution time: {execution_time:.6f}s")
+                self.logger.debug(f"[DEBUG] Command return code: {result.returncode}")
+                self.logger.debug(f"[DEBUG] Command stderr: {result.stderr}")
+                
+                # Log first few lines of stdout for debugging
+                if result.stdout:
+                    lines = result.stdout.split('\n')
+                    preview = '\n'.join(lines[:5])
+                    self.logger.debug(f"[DEBUG] Command stdout preview (first 5 lines):\n{preview}")
+                    self.logger.debug(f"[DEBUG] Total output lines: {len(lines)}")
             
             if result.returncode == 0:
                 self.logger.debug(f"{description} completed in {execution_time:.2f}s")
@@ -117,7 +194,11 @@ class ReconTool:
                 self.logger.error(f"{description} failed: {result.stderr}")
                 return None
         except Exception as e:
-            self.logger.error(f"Error executing {description}: {str(e)}")
+            execution_time = time.time() - start_time
+            self.logger.error(f"Error executing {description} after {execution_time:.2f}s: {str(e)}")
+            if self.debug:
+                import traceback
+                self.logger.debug(f"[DEBUG] Exception traceback:\n{traceback.format_exc()}")
             return None
 
     def save_results(self):
@@ -128,9 +209,20 @@ class ReconTool:
         self.logger.info(f"Results saved to {output_file}")
         return output_file
 
+    def check_user_confirmation(self, phase_name):
+        """Ask for user confirmation in interactive mode."""
+        if not self.interactive:
+            return True
+        
+        response = input(f"\n[?] Proceed with {phase_name}? [Y/n]: ").strip().lower()
+        if response == '' or response == 'y' or response == 'yes':
+            return True
+        return False
+
     def subdomain_enumeration(self):
         """Enumerate subdomains of the target."""
-        self.logger.info("Starting subdomain enumeration")
+        # Always run passive subdomain enumeration
+        self.logger.info("Starting passive subdomain enumeration")
         
         # Example using subfinder (you can replace this with your preferred tool)
         output_file = os.path.join(self.output_dir, "subdomains.txt")
@@ -155,7 +247,11 @@ class ReconTool:
         return self.results["subdomains"]
 
     def active_subdomain_enumeration(self):
-        """Perform active subdomain enumeration using a wordlist and dnsx."""
+        """Perform active subdomain enumeration using a wordlist and dnsx."""            
+        if not self.check_user_confirmation("active subdomain enumeration"):
+            self.logger.info("Skipping active subdomain enumeration")
+            return self.results["subdomains"]
+            
         self.logger.info("Starting active subdomain enumeration with wordlist")
         
         # Check if dnsx is available
@@ -166,17 +262,115 @@ class ReconTool:
         # Output file for active enumeration
         output_file = os.path.join(self.output_dir, "active_enumerated_subdomains.txt")
         
-        # Path to wordlist
-        wordlist_path = os.path.join("wordlists", "subdomains_top20000.txt")
+        # Path to wordlist from config
+        wordlist_path = self.config.get('subdomain_enumeration', {}).get('wordlist', "wordlists/subdomains_top5000.txt")
         
-        # Run dnsx for active enumeration
-        command = (
-            f"dnsx -d {self.target} -w {wordlist_path} -o {output_file} "
-            f"-r 8.8.8.8,1.1.1.1 -t {self.threads} -silent"
-        )
-        self.run_command(command, "Active subdomain enumeration")
+        if self.debug:
+            self.logger.debug(f"[DEBUG] Using wordlist: {wordlist_path}")
+            if os.path.exists(wordlist_path):
+                wordlist_size = os.path.getsize(wordlist_path)
+                self.logger.debug(f"[DEBUG] Wordlist size: {wordlist_size} bytes")
+                
+                # Count lines in wordlist
+                with open(wordlist_path, 'r') as f:
+                    line_count = sum(1 for _ in f)
+                self.logger.debug(f"[DEBUG] Wordlist contains {line_count} entries")
+            else:
+                self.logger.debug(f"[DEBUG] Wordlist not found at path: {wordlist_path}")
+                
+            self.logger.debug(f"[DEBUG] Thread count: {self.threads}")
         
-        # Read new subdomains and merge with existing ones
+        # Check if wordlist exists
+        if not os.path.exists(wordlist_path):
+            self.logger.error(f"Wordlist not found: {wordlist_path}")
+            return self.results["subdomains"]
+            
+        # Clear output file if it exists
+        if os.path.exists(output_file):
+            os.remove(output_file)
+
+        # Use ThreadPoolExecutor for faster processing
+        self.logger.info("Using ThreadPoolExecutor for parallel subdomain enumeration")
+        
+        # Read the wordlist
+        with open(wordlist_path, 'r') as f:
+            words = [line.strip() for line in f if line.strip()]
+        
+        # Determine optimal chunk size and number of workers
+        num_words = len(words)
+        # Use CPU count as a baseline for number of workers
+        num_workers = min(os.cpu_count() or 4, 8)  # Limit to 8 workers max to avoid overwhelming the system
+        chunk_size = max(1, num_words // num_workers)
+        
+        # Use 20 threads for dnsx (or config value if higher)
+        dnsx_threads = max(20, self.threads)
+        
+        chunks = [words[i:i + chunk_size] for i in range(0, num_words, chunk_size)]
+        self.logger.info(f"Split wordlist into {len(chunks)} chunks of ~{chunk_size} words each")
+        
+        # Function to process a chunk of the wordlist
+        def process_chunk(chunk_words):
+            # Create a temporary wordlist chunk file with thread ID to avoid conflicts
+            import threading
+            chunk_file = os.path.join(self.output_dir, f"temp_chunk_{threading.get_ident()}.txt")
+            with open(chunk_file, 'w') as f:
+                for word in chunk_words:
+                    f.write(f"{word}\n")
+            
+            # Run dnsx on this chunk
+            chunk_output = os.path.join(self.output_dir, f"temp_output_{threading.get_ident()}.txt")
+            cmd = f"dnsx -d {self.target} -w {chunk_file} -o {chunk_output} -t {dnsx_threads} -retry 2 -rate-limit 500 -silent"
+            
+            try:
+                # Run the command
+                subprocess.run(cmd, shell=True, check=True, capture_output=True, text=True)
+                
+                # Read results if any
+                found_subdomains = []
+                if os.path.exists(chunk_output):
+                    with open(chunk_output, 'r') as f:
+                        found_subdomains = [line.strip() for line in f if line.strip()]
+                    
+                    # Append to main output file
+                    with open(output_file, 'a') as f:
+                        for subdomain in found_subdomains:
+                            f.write(f"{subdomain}\n")
+                    
+                    # Clean up
+                    os.remove(chunk_output)
+                
+                os.remove(chunk_file)
+                return len(found_subdomains)
+            except Exception as e:
+                self.logger.error(f"Error processing chunk: {str(e)}")
+                # Clean up any temp files
+                if os.path.exists(chunk_file):
+                    os.remove(chunk_file)
+                if os.path.exists(chunk_output):
+                    os.remove(chunk_output)
+                return 0
+        
+        # Process chunks in parallel using ThreadPoolExecutor
+        import concurrent.futures
+        total_found = 0
+        
+        start_time = time.time()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
+            futures = [executor.submit(process_chunk, chunk) for chunk in chunks]
+            
+            # Process results as they complete
+            for future in concurrent.futures.as_completed(futures):
+                try:
+                    count = future.result()
+                    total_found += count
+                    self.logger.debug(f"Chunk processed, found {count} subdomains")
+                except Exception as e:
+                    self.logger.error(f"Error in subdomain enumeration: {str(e)}")
+        
+        execution_time = time.time() - start_time
+        self.logger.info(f"Active enumeration completed in {execution_time:.2f}s")
+        
+        # Read new subdomains from the output file
         new_subdomains = []
         if os.path.exists(output_file):
             with open(output_file, 'r') as f:
@@ -193,6 +387,10 @@ class ReconTool:
 
     def ip_resolution(self, domains=None):
         """Resolve IP addresses for domains using dnsx."""
+        if not self.check_user_confirmation("IP resolution"):
+            self.logger.info("Skipping IP resolution")
+            return []
+            
         self.logger.info("Starting IP resolution with dnsx")
         domains = domains or self.results["subdomains"]
         if not domains:
@@ -201,53 +399,121 @@ class ReconTool:
         # Track which domains resolve to which IPs
         ip_to_domains = {}
         output_file = os.path.join(self.output_dir, "ip_addresses.txt")
-        
-        # Create a temporary file with all domains to resolve
-        temp_domains_file = os.path.join(self.output_dir, "temp_domains_to_resolve.txt")
-        with open(temp_domains_file, 'w') as f:
-            for domain in domains:
-                f.write(f"{domain}\n")
-        
-        # Output file for dnsx
         json_output_file = os.path.join(self.output_dir, "ip_addresses.json")
         
-        # Run dnsx for IP resolution
-        command = (
-            f"dnsx -l {temp_domains_file} -json -o {json_output_file} "
-            f"-a -r 8.8.8.8,1.1.1.1 -t {self.threads} -silent"
-        )
-        self.run_command(command, "IP resolution")
+        # Clear output files if they exist
+        for file_path in [output_file, json_output_file]:
+            if os.path.exists(file_path):
+                os.remove(file_path)
         
-        # Process results
+        # Use ThreadPoolExecutor for faster processing
+        self.logger.info("Using ThreadPoolExecutor for parallel IP resolution")
+        
+        # Use 20 threads for dnsx (or config value if higher)
+        dnsx_threads = max(20, self.threads)
+        
+        # Determine optimal chunk size and number of workers
+        num_domains = len(domains)
+        # Use CPU count as a baseline for number of workers
+        num_workers = min(os.cpu_count() or 4, 8)  # Limit to 8 workers max
+        chunk_size = max(1, num_domains // num_workers)
+        
+        # Split domains into chunks
+        chunks = [domains[i:i + chunk_size] for i in range(0, num_domains, chunk_size)]
+        self.logger.info(f"Split {num_domains} domains into {len(chunks)} chunks of ~{chunk_size} domains each")
+        
+        # Function to process a chunk of domains
+        def process_chunk(chunk_domains):
+            # Create a temporary domains file
+            import threading
+            chunk_file = os.path.join(self.output_dir, f"temp_domains_{threading.get_ident()}.txt")
+            with open(chunk_file, 'w') as f:
+                for domain in chunk_domains:
+                    f.write(f"{domain}\n")
+            
+            # Run dnsx on this chunk
+            chunk_output = os.path.join(self.output_dir, f"temp_ip_{threading.get_ident()}.json")
+            cmd = f"dnsx -l {chunk_file} -json -o {chunk_output} -a -t {dnsx_threads} -retry 2 -rate-limit 500 -silent"
+            
+            try:
+                # Run the command
+                subprocess.run(cmd, shell=True, check=True, capture_output=True, text=True)
+                
+                # Process results if any
+                chunk_results = []
+                if os.path.exists(chunk_output):
+                    with open(chunk_output, 'r') as f:
+                        for line in f:
+                            try:
+                                result = json.loads(line)
+                                chunk_results.append(result)
+                                
+                                # Append to main JSON output file
+                                with open(json_output_file, 'a') as out_f:
+                                    out_f.write(f"{line.strip()}\n")
+                            except json.JSONDecodeError:
+                                self.logger.warning(f"Could not parse JSON line: {line}")
+                    
+                    # Clean up
+                    os.remove(chunk_output)
+                
+                os.remove(chunk_file)
+                return chunk_results
+            except Exception as e:
+                self.logger.error(f"Error processing domain chunk: {str(e)}")
+                # Clean up any temp files
+                if os.path.exists(chunk_file):
+                    os.remove(chunk_file)
+                if os.path.exists(chunk_output):
+                    os.remove(chunk_output)
+                return []
+        
+        # Process chunks in parallel using ThreadPoolExecutor
+        import concurrent.futures
+        all_ip_results = []
+        
+        start_time = time.time()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
+            futures = [executor.submit(process_chunk, chunk) for chunk in chunks]
+            
+            # Process results as they complete
+            for future in concurrent.futures.as_completed(futures):
+                try:
+                    chunk_results = future.result()
+                    all_ip_results.extend(chunk_results)
+                    self.logger.debug(f"Domain chunk processed, found {len(chunk_results)} IP results")
+                except Exception as e:
+                    self.logger.error(f"Error in IP resolution: {str(e)}")
+        
+        execution_time = time.time() - start_time
+        self.logger.info(f"IP resolution completed in {execution_time:.2f}s")
+        
+        # Process all results
         ip_addresses = []
         
-        if os.path.exists(json_output_file):
-            with open(json_output_file, 'r') as f, open(output_file, 'w') as out_f:
-                for line in f:
-                    try:
-                        result = json.loads(line)
-                        domain = result.get("host")
-                        ips = result.get("a", [])
-                        
-                        if domain and ips:
-                            # Write to the output file
-                            out_f.write(f"{domain}: {', '.join(ips)}\n")
-                            
-                            # Update results
-                            ip_addresses.extend(ips)
-                            
-                            # Map IP to domains
-                            for ip in ips:
-                                if ip not in ip_to_domains:
-                                    ip_to_domains[ip] = []
-                                ip_to_domains[ip].append(domain)
-                    except json.JSONDecodeError:
-                        self.logger.warning(f"Could not parse JSON line: {line}")
+        # Open output file for writing the human-readable results
+        with open(output_file, 'w') as out_f:
+            for result in all_ip_results:
+                domain = result.get("host")
+                ips = result.get("a", [])
                 
-                # Write IP to domains mapping
-                out_f.write("\n\n# IP Addresses with associated subdomains:\n")
-                for ip, domains in ip_to_domains.items():
-                    out_f.write(f"{ip}: {', '.join(domains)}\n")
+                if domain and ips:
+                    # Write to the output file
+                    out_f.write(f"{domain}: {', '.join(ips)}\n")
+                    
+                    # Update results
+                    ip_addresses.extend(ips)
+                    
+                    # Map IP to domains
+                    for ip in ips:
+                        if ip not in ip_to_domains:
+                            ip_to_domains[ip] = []
+                        ip_to_domains[ip].append(domain)
+            
+            # Write IP to domains mapping
+            out_f.write("\n\n# IP Addresses with associated subdomains:\n")
+            for ip, domains in ip_to_domains.items():
+                out_f.write(f"{ip}: {', '.join(domains)}\n")
         
         # Remove duplicates
         self.results["ip_addresses"] = list(set(ip_addresses))
@@ -255,15 +521,15 @@ class ReconTool:
         # Store the IP to domains mapping in results
         self.results["ip_to_domains"] = ip_to_domains
         
-        # Clean up
-        if os.path.exists(temp_domains_file):
-            os.remove(temp_domains_file)
-        
         self.logger.info(f"Resolved {len(self.results['ip_addresses'])} unique IP addresses")
         return self.results["ip_addresses"]
 
     def port_scanning(self, targets=None):
         """Scan for open ports on targets."""
+        if not self.check_user_confirmation("port scanning"):
+            self.logger.info("Skipping port scanning")
+            return {}
+            
         self.logger.info("Starting port scanning")
         targets = targets or self.results["ip_addresses"]
         if not targets:
@@ -280,8 +546,20 @@ class ReconTool:
             self.logger.debug(f"Scanning ports for: {ip}")
             output_file = os.path.join(self.output_dir, f"nmap_{ip.replace('.', '_')}.xml")
             
+            # Get scan type from config
+            scan_type = self.config.get('port_scan', {}).get('scan_type', "top-1000")
+            additional_args = self.config.get('port_scan', {}).get('additional_args', "-T4")
+            
+            # Determine port range based on scan type
+            if scan_type == "full":
+                port_arg = "-p-"
+            elif scan_type == "top-100":
+                port_arg = "--top-ports 100"
+            else:  # Default to top-1000
+                port_arg = "--top-ports 1000"
+            
             # Run nmap scan 
-            command = f"nmap -sV --top-ports 1000 -T4 {ip} -oX {output_file}"
+            command = f"nmap -sV {port_arg} {additional_args} {ip} -oX {output_file}"
             self.run_command(command, f"Port scanning for {ip}")
             
             result = {"ip": ip, "ports": [], "services": {}}
@@ -339,10 +617,11 @@ class ReconTool:
 
     def vulnerability_scanning(self):
         """Basic vulnerability scanning."""
+        if not self.check_user_confirmation("vulnerability scanning"):
+            self.logger.info("Skipping vulnerability scanning")
+            return []
+            
         self.logger.info("Starting vulnerability scanning")
-        
-        # This is a placeholder - in a real tool, you'd integrate with tools like Nuclei, Nessus, etc.
-        # For now, we'll just create a sample vulnerability report
         
         # Example of what this might look like with Nuclei
         for domain in self.results["subdomains"] or [self.target]:
@@ -373,10 +652,18 @@ class ReconTool:
 
     def run_recon(self):
         """Run the complete recon pipeline."""
-        self.logger.info("Starting full reconnaissance")
+        self.logger.info("Starting reconnaissance")
         
-        # Execute the recon pipeline
+        if self.interactive:
+            self.logger.info("Running in interactive mode")
+            print("\n=== Sploitec Recon Interactive Mode ===")
+            print(f"Target: {self.target}")
+            print("Passive subdomain enumeration will run first, then you will be prompted before each additional phase.\n")
+        
+        # Always execute passive subdomain enumeration without prompting
         self.subdomain_enumeration()
+        
+        # Execute the rest of the recon pipeline with interactive prompts if enabled
         self.active_subdomain_enumeration()
         self.ip_resolution()
         self.port_scanning()
@@ -422,6 +709,14 @@ class ReconTool:
         self.logger.info("Generating HTML report")
         
         html_file = os.path.join(self.output_dir, "report.html")
+        
+        # Create a lookup for domains to IPs
+        domain_to_ips = {}
+        for ip, domains in self.results.get("ip_to_domains", {}).items():
+            for domain in domains:
+                if domain not in domain_to_ips:
+                    domain_to_ips[domain] = []
+                domain_to_ips[domain].append(ip)
         
         # Create basic HTML template
         html_template = f"""<!DOCTYPE html>
@@ -528,8 +823,12 @@ class ReconTool:
             <tr>
                 <th>#</th>
                 <th>Subdomain</th>
+                <th>IP Address</th>
             </tr>
-            {''.join(f'<tr><td>{i+1}</td><td>{subdomain}</td></tr>' for i, subdomain in enumerate(self.results['subdomains'][:100]))}
+            {''.join(
+                f'<tr><td>{i+1}</td><td>{subdomain}</td><td>{", ".join(domain_to_ips.get(subdomain, []))}</td></tr>' 
+                for i, subdomain in enumerate(self.results['subdomains'][:100])
+            )}
         </table>
         {f'<p>Showing 100 of {len(self.results["subdomains"])} subdomains. See full list in the JSON results.</p>' if len(self.results['subdomains']) > 100 else ''}
     </div>
@@ -604,8 +903,11 @@ def main():
     
     # Other arguments
     parser.add_argument("-o", "--output", help="Custom output directory (default: results/target_timestamp)")
-    parser.add_argument("-t", "--threads", type=int, default=5, help="Number of threads to use")
+    parser.add_argument("-t", "--threads", type=int, help="Number of threads to use (default: from config or 5)")
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose output")
+    parser.add_argument("-i", "--interactive", action="store_true", help="Interactive mode - prompt before each phase")
+    parser.add_argument("--debug", action="store_true", help="Enable debug mode with detailed timing and execution info")
+    parser.add_argument("--config", help="Path to custom config file")
     
     args = parser.parse_args()
     
@@ -650,7 +952,9 @@ def main():
             target=target,
             output_dir=args.output,
             threads=args.threads,
-            verbose=args.verbose
+            verbose=args.verbose,
+            interactive=args.interactive,
+            debug=args.debug
         )
         
         # Run the recon pipeline

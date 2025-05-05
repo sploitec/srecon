@@ -31,8 +31,11 @@ config/*.yml
 config/*.json
 config/*.conf
 config/*.cfg
+# Main config file
+/config.yaml
 # But allow template files
 !config/*.template
+!*.template
 
 # Logs
 *.log

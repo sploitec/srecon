@@ -13,6 +13,8 @@ A modular reconnaissance tool designed for red team engagements. This tool autom
 - Results export to JSON and HTML
 - Summary generation
 - Multi-threaded scanning
+- Interactive mode: Choose which scan phases to run
+- Configuration file support for customization
 
 ## Requirements
 
@@ -66,9 +68,40 @@ GO111MODULE=on go get -v github.com/projectdiscovery/nuclei/v2/cmd/nuclei
 5. Set up configuration files:
 ```bash
 # Copy template config files and customize them with your API keys
+cp config.yaml.template config.yaml
 cp config/subfinder.yaml.template config/subfinder.yaml
 # Edit config/subfinder.yaml and add your API keys
 ```
+
+## Configuration
+
+The tool uses configuration files to customize its behavior. The main configuration file is `config.yaml` in the root directory.
+
+### Main Configuration (config.yaml)
+
+This file contains settings for the tool's operation:
+
+```yaml
+# General settings
+general:
+  threads: 5                 # Default number of threads to use
+  verbose: false             # Enable verbose output by default
+  interactive: false         # Interactive mode: prompt before each scan phase
+
+# Subdomain enumeration settings
+subdomain_enumeration:
+  wordlist: "wordlists/subdomains_top5000.txt"   # Path to active enumeration wordlist
+  resolvers: "8.8.8.8,1.1.1.1"                   # DNS resolvers to use
+
+# Port scanning settings
+port_scan:
+  scan_type: "top-1000"      # Port scan type: full, top-1000, top-100
+  additional_args: "-T4"     # Additional nmap arguments
+```
+
+### API Configuration (config/subfinder.yaml)
+
+This file contains API keys for various services used in passive subdomain enumeration.
 
 ## Usage
 
@@ -80,12 +113,15 @@ python srecon.py -d example.com
 
 # Scan multiple domains from a file
 python srecon.py -f domains.txt
+
+# Run in interactive mode
+python srecon.py -d example.com -i
 ```
 
 ### Options:
 
 ```
-usage: srecon.py [-h] (-d DOMAIN | -f FILE) [-o OUTPUT] [-t THREADS] [-v]
+usage: srecon.py [-h] (-d DOMAIN | -f FILE) [-o OUTPUT] [-t THREADS] [-v] [-i] [--config CONFIG]
 
 Automated Reconnaissance Tool for Red Teaming
 
@@ -97,8 +133,10 @@ optional arguments:
   -o OUTPUT, --output OUTPUT
                         Custom output directory (default: results/target_timestamp)
   -t THREADS, --threads THREADS
-                        Number of threads to use (default: 5)
+                        Number of threads to use (default: from config or 5)
   -v, --verbose         Enable verbose output
+  -i, --interactive     Interactive mode - prompt before each phase
+  --config CONFIG       Path to custom config file
 ```
 
 ### Examples:
@@ -112,6 +150,9 @@ python srecon.py -d example.com -o custom_output_dir
 
 # Enable verbose output
 python srecon.py -d example.com -v
+
+# Run in interactive mode
+python srecon.py -d example.com -i
 
 # Scan multiple domains from a file
 python srecon.py -f domains.txt -t 8
@@ -137,16 +178,33 @@ All scan results are stored in the `results` directory by default. For each scan
 srecon/
 ├── srecon.py         # Main script
 ├── requirements.txt  # Python dependencies
+├── config.yaml       # Main configuration file
 ├── config/           # Tool configuration directory
 │   └── *.template    # Configuration templates
 ├── wordlists/        # Directory containing wordlists for active enumeration
-│   └── subdomains_top20000.txt  # Default subdomain wordlist
+│   └── subdomains_top5000.txt  # Default subdomain wordlist
 ├── results/          # Directory containing all scan results (not tracked in git)
 │   └── example.com_20230101_120000/  # Example scan result directory
 ├── venv/             # Virtual environment (not tracked in git)
 ├── README.md         # This file
 └── .gitignore        # Git ignore configuration
 ```
+
+## Interactive Mode
+
+When running in interactive mode (`-i` flag), the tool will:
+
+1. Always run passive subdomain enumeration first without prompting
+2. Then prompt you before each subsequent scan phase:
+   - Active subdomain enumeration
+   - IP resolution
+   - Port scanning
+   - Vulnerability scanning
+
+This allows you to selectively run only the phases you're interested in, which can be useful for:
+- Focusing on specific aspects of reconnaissance
+- Reducing noise and scan time
+- Avoiding more aggressive scans in sensitive environments
 
 ## Extending the Tool
 
