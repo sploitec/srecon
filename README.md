@@ -14,12 +14,23 @@ A modular reconnaissance tool designed for red team engagements. This tool autom
   - Page title extraction
   - Technology stack identification
 - Port scanning
-- Basic vulnerability scanning
+- Vulnerability scanning (Currently disabled)
 - Results export to JSON and HTML
 - Summary generation
 - Multi-threaded scanning with optimized performance
 - Interactive mode: Choose which scan phases to run
 - Configuration file support for customization
+
+## TODO / Roadmap
+
+The following improvements are planned for future development:
+
+- [ ] Implement Nuclei-based vulnerability scanning with proper error handling and parallel scanning
+- [ ] Add advanced reconnaissance capabilities including Google dorking and subdomain takeover detection
+- [ ] Integrate additional discovery tools like Amass, Assetfinder, and cloud enumeration tools
+- [ ] Enhance reporting with interactive dashboards and additional export formats
+- [ ] Improve architecture with caching, database storage, and API interfaces
+- [ ] Add screenshots and content discovery features for more comprehensive reconnaissance
 
 ## Requirements
 
@@ -29,7 +40,7 @@ The tool requires several external utilities that should be installed on your sy
 - `dnsx` - for active subdomain enumeration and DNS resolution
 - `httpx` - for HTTP/HTTPS service detection and analysis
 - `nmap` - for port scanning
-- `nuclei` - for vulnerability scanning (optional)
+- `nuclei` - for vulnerability scanning (optional, currently not used)
 
 ## Installation
 

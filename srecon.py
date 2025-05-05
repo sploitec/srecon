@@ -14,6 +14,7 @@ import yaml
 import concurrent.futures
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
+import re
 
 # Suppress SSL verification warnings
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
