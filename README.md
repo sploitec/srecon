@@ -91,7 +91,6 @@ general:
 # Subdomain enumeration settings
 subdomain_enumeration:
   wordlist: "wordlists/subdomains_top5000.txt"   # Path to active enumeration wordlist
-  resolvers: "8.8.8.8,1.1.1.1"                   # DNS resolvers to use
 
 # Port scanning settings
 port_scan:
