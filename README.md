@@ -4,8 +4,10 @@ A modular reconnaissance tool designed for red team engagements. This tool autom
 
 ## Features
 
-- Subdomain enumeration
-- IP resolution
+- Comprehensive subdomain discovery:
+  - Passive enumeration using subfinder
+  - Active enumeration using dnsx with wordlists
+- IP resolution and mapping
 - Port scanning
 - Basic vulnerability scanning
 - Results export to JSON and HTML
@@ -16,8 +18,8 @@ A modular reconnaissance tool designed for red team engagements. This tool autom
 
 The tool requires several external utilities that should be installed on your system:
 
-- `subfinder` - for subdomain enumeration
-- `host` - for DNS resolution
+- `subfinder` - for passive subdomain enumeration
+- `dnsx` - for active subdomain enumeration and DNS resolution
 - `nmap` - for port scanning
 - `nuclei` - for vulnerability scanning (optional)
 
@@ -53,6 +55,9 @@ sudo apt install nmap dnsutils
 
 # Install subfinder
 GO111MODULE=on go get -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder
+
+# Install dnsx
+GO111MODULE=on go get -v github.com/projectdiscovery/dnsx/cmd/dnsx
 
 # Install nuclei (optional)
 GO111MODULE=on go get -v github.com/projectdiscovery/nuclei/v2/cmd/nuclei
@@ -116,8 +121,10 @@ python srecon.py -f domains.txt -t 8
 
 All scan results are stored in the `results` directory by default. For each scan, a new directory is created with the format `target_timestamp` that contains:
 
-- `subdomains.txt` - List of discovered subdomains
+- `subdomains.txt` - List of discovered subdomains from passive techniques
+- `active_enumerated_subdomains.txt` - List of subdomains discovered through active enumeration
 - `ip_addresses.txt` - List of resolved IP addresses
+- `ip_addresses.json` - Raw DNS resolution results from dnsx
 - `nmap_*.xml` - Raw nmap scan results for each IP
 - `results.json` - Complete results in JSON format
 - `report.html` - Comprehensive HTML report
@@ -132,6 +139,8 @@ srecon/
 ├── requirements.txt  # Python dependencies
 ├── config/           # Tool configuration directory
 │   └── *.template    # Configuration templates
+├── wordlists/        # Directory containing wordlists for active enumeration
+│   └── subdomains_top20000.txt  # Default subdomain wordlist
 ├── results/          # Directory containing all scan results (not tracked in git)
 │   └── example.com_20230101_120000/  # Example scan result directory
 ├── venv/             # Virtual environment (not tracked in git)
@@ -156,4 +165,3 @@ The code is designed to be modular. To add new functionality:
 ## License
 
 MIT License
-

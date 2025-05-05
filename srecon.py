@@ -78,7 +78,7 @@ class ReconTool:
         self.logger.info("Checking dependencies...")
         dependencies = {
             "subfinder": "Subdomain enumeration",
-            "host": "IP resolution",
+            "dnsx": "DNS resolution and subdomain enumeration",
             "nmap": "Port scanning",
             "nuclei": "Vulnerability scanning"
         }
@@ -154,60 +154,110 @@ class ReconTool:
         
         return self.results["subdomains"]
 
+    def active_subdomain_enumeration(self):
+        """Perform active subdomain enumeration using a wordlist and dnsx."""
+        self.logger.info("Starting active subdomain enumeration with wordlist")
+        
+        # Check if dnsx is available
+        if not shutil.which("dnsx"):
+            self.logger.warning("dnsx not found. Skipping active subdomain enumeration.")
+            return self.results["subdomains"]
+        
+        # Output file for active enumeration
+        output_file = os.path.join(self.output_dir, "active_enumerated_subdomains.txt")
+        
+        # Path to wordlist
+        wordlist_path = os.path.join("wordlists", "subdomains_top20000.txt")
+        
+        # Run dnsx for active enumeration
+        command = (
+            f"dnsx -d {self.target} -w {wordlist_path} -o {output_file} "
+            f"-r 8.8.8.8,1.1.1.1 -t {self.threads} -silent"
+        )
+        self.run_command(command, "Active subdomain enumeration")
+        
+        # Read new subdomains and merge with existing ones
+        new_subdomains = []
+        if os.path.exists(output_file):
+            with open(output_file, 'r') as f:
+                new_subdomains = [line.strip() for line in f if line.strip()]
+        
+        # Merge and deduplicate
+        combined_subdomains = list(set(self.results["subdomains"] + new_subdomains))
+        self.results["subdomains"] = combined_subdomains
+        
+        self.logger.info(f"Active enumeration found {len(new_subdomains)} new subdomains")
+        self.logger.info(f"Total unique subdomains: {len(combined_subdomains)}")
+        
+        return self.results["subdomains"]
+
     def ip_resolution(self, domains=None):
-        """Resolve IP addresses for domains."""
-        self.logger.info("Starting IP resolution")
+        """Resolve IP addresses for domains using dnsx."""
+        self.logger.info("Starting IP resolution with dnsx")
         domains = domains or self.results["subdomains"]
         if not domains:
             domains = [self.target]
         
-        ip_dict = {}
         # Track which domains resolve to which IPs
         ip_to_domains = {}
         output_file = os.path.join(self.output_dir, "ip_addresses.txt")
         
-        def resolve_domain(domain):
-            """Helper function to resolve a single domain."""
-            self.logger.debug(f"Resolving IP for: {domain}")
-            command = f"host {domain} | grep 'has address' | cut -d ' ' -f 4"
-            output = self.run_command(command, f"IP resolution for {domain}")
-            
-            result = {}
-            if output:
-                ips = [ip.strip() for ip in output.split('\n') if ip.strip()]
-                if ips:
-                    result = {domain: ips}
-            return result
+        # Create a temporary file with all domains to resolve
+        temp_domains_file = os.path.join(self.output_dir, "temp_domains_to_resolve.txt")
+        with open(temp_domains_file, 'w') as f:
+            for domain in domains:
+                f.write(f"{domain}\n")
         
-        # Use ThreadPoolExecutor for parallel resolution
-        with ThreadPoolExecutor(max_workers=self.threads) as executor:
-            results = list(executor.map(resolve_domain, domains))
+        # Output file for dnsx
+        json_output_file = os.path.join(self.output_dir, "ip_addresses.json")
         
-        # Consolidate results
-        for result in results:
-            ip_dict.update(result)
-            for domain, ips in result.items():
-                for ip in ips:
-                    self.results["ip_addresses"].append(ip)
-                    # Map IP to domains
-                    if ip not in ip_to_domains:
-                        ip_to_domains[ip] = []
-                    ip_to_domains[ip].append(domain)
+        # Run dnsx for IP resolution
+        command = (
+            f"dnsx -l {temp_domains_file} -json -o {json_output_file} "
+            f"-a -r 8.8.8.8,1.1.1.1 -t {self.threads} -silent"
+        )
+        self.run_command(command, "IP resolution")
+        
+        # Process results
+        ip_addresses = []
+        
+        if os.path.exists(json_output_file):
+            with open(json_output_file, 'r') as f, open(output_file, 'w') as out_f:
+                for line in f:
+                    try:
+                        result = json.loads(line)
+                        domain = result.get("host")
+                        ips = result.get("a", [])
+                        
+                        if domain and ips:
+                            # Write to the output file
+                            out_f.write(f"{domain}: {', '.join(ips)}\n")
+                            
+                            # Update results
+                            ip_addresses.extend(ips)
+                            
+                            # Map IP to domains
+                            for ip in ips:
+                                if ip not in ip_to_domains:
+                                    ip_to_domains[ip] = []
+                                ip_to_domains[ip].append(domain)
+                    except json.JSONDecodeError:
+                        self.logger.warning(f"Could not parse JSON line: {line}")
+                
+                # Write IP to domains mapping
+                out_f.write("\n\n# IP Addresses with associated subdomains:\n")
+                for ip, domains in ip_to_domains.items():
+                    out_f.write(f"{ip}: {', '.join(domains)}\n")
         
         # Remove duplicates
-        self.results["ip_addresses"] = list(set(self.results["ip_addresses"]))
+        self.results["ip_addresses"] = list(set(ip_addresses))
         
         # Store the IP to domains mapping in results
         self.results["ip_to_domains"] = ip_to_domains
         
-        # Save to file
-        with open(output_file, 'w') as f:
-            for domain, ips in ip_dict.items():
-                f.write(f"{domain}: {', '.join(ips)}\n")
-            
-            f.write("\n\n# IP Addresses with associated subdomains:\n")
-            for ip, domains in ip_to_domains.items():
-                f.write(f"{ip}: {', '.join(domains)}\n")
+        # Clean up
+        if os.path.exists(temp_domains_file):
+            os.remove(temp_domains_file)
         
         self.logger.info(f"Resolved {len(self.results['ip_addresses'])} unique IP addresses")
         return self.results["ip_addresses"]
@@ -327,6 +377,7 @@ class ReconTool:
         
         # Execute the recon pipeline
         self.subdomain_enumeration()
+        self.active_subdomain_enumeration()
         self.ip_resolution()
         self.port_scanning()
         self.vulnerability_scanning()
