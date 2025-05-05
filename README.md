@@ -65,19 +65,6 @@ cp config/subfinder.yaml.template config/subfinder.yaml
 # Edit config/subfinder.yaml and add your API keys
 ```
 
-## Configuration
-
-The tool uses configuration files located in the `config` directory:
-
-- `subfinder.yaml`: Configuration for the Subfinder tool, including API keys for various services
-  
-To use these configurations:
-1. Copy the template files: `*.template` → remove the `.template` extension
-2. Edit the files to add your API keys and customize settings
-3. The tool will automatically detect and use these config files when available
-
-**Note**: Configuration files with API keys are excluded from Git to prevent accidental exposure of sensitive information. Only template files are included in the repository.
-
 ## Usage
 
 ### Basic usage:
