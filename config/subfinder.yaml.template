@@ -34,7 +34,7 @@ github:
 hunter:
   - <api key>
 intelx:
-  - <api key>
+  - <host:api key>
 netlas:
   - <api key>
 leakix:
