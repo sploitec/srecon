@@ -963,39 +963,142 @@ class ReconTool:
         # Just use the main target domain without wildcard
         main_domain = self.target
         
-        # Default dork patterns if none are found in config
-        default_dork_patterns = [
-            "site:{target} inurl:login",
-            "site:{target} ext:php",
-            "site:{target} ext:asp",
-            "site:{target} intitle:\"index of\"",
-            "site:{target} intext:password",
-            "site:{target} inurl:config",
-            "site:{target} inurl:setup",
-            "site:{target} inurl:backup",
-            "site:{target} filetype:pdf",
-            "site:{target} inurl:wp-content",
-            "site:{target} inurl:wp-admin",
-            "site:{target} ext:sql",
-            "site:{target} ext:bak",
-            "site:{target} inurl:dev",
-            "site:{target} inurl:test",
-            "site:{target} inurl:admin",
-            "site:{target} intitle:\"dashboard\"",
-            "site:{target} ext:log",
-            "site:{target} inurl:api",
-            "site:{target} ext:xml",
-            "site:{target} inurl:debug",
-            "site:{target} inurl:staging",
-            "site:{target} \"powered by\"",
-            "site:{target} \"SQL syntax\"",
-            "site:{target} \"Warning:\"",
-            "site:{target} \"error in your SQL syntax\"",
-            "site:{target} intext:\"Welcome to phpMyAdmin\"",
-            "site:{target} inurl:jenkins",
-            "site:{target} inurl:jira",
-            "site:{target} inurl:gitlab"
-        ]
+        # Expanded dork categories with comprehensive patterns
+        default_categories = {
+            "credentials": [
+                "site:{target} inurl:login",
+                "site:{target} intext:password", 
+                "site:{target} inurl:admin",
+                "site:{target} ext:htpasswd",
+                "site:{target} inurl:.htpasswd",
+                "site:{target} inurl:wp-config",
+                "site:{target} intext:\"username\" intext:\"password\"",
+                "site:{target} inurl:\"login\" intext:\"admin\"",
+                "site:{target} inurl:reset_password",
+                "site:{target} inurl:wp-login",
+                "site:{target} inurl:auth"
+            ],
+            "config_files": [
+                "site:{target} ext:conf",
+                "site:{target} ext:cnf",
+                "site:{target} ext:ini",
+                "site:{target} ext:env",
+                "site:{target} ext:htaccess",
+                "site:{target} inurl:phpinfo.php",
+                "site:{target} filetype:env",
+                "site:{target} intext:\"connect_error\""
+            ],
+            "document_files": [
+                "site:{target} ext:txt",
+                "site:{target} ext:pdf",
+                "site:{target} ext:doc",
+                "site:{target} ext:docx",
+                "site:{target} ext:xls",
+                "site:{target} ext:xlsx",
+                "site:{target} ext:csv",
+                "site:{target} intext:\"password\" filetype:txt",
+                "site:{target} inurl:drive.google.com filetype:pdf"
+            ],
+            "database_files": [
+                "site:{target} ext:sql",
+                "site:{target} intext:\"sql dump\"",
+                "site:{target} intext:\"error in your SQL syntax\"",
+                "site:{target} intext:\"SQL syntax\""
+            ],
+            "tech_files": [
+                "site:{target} ext:php",
+                "site:{target} ext:asp",
+                "site:{target} ext:json",
+                "site:{target} ext:xml",
+                "site:{target} ext:yml",
+                "site:{target} ext:sh",
+                "site:{target} intext:\"powered by\""
+            ],
+            "source_code": [
+                "site:{target} ext:git",
+                "site:{target} ext:svn",
+                "site:{target} inurl:.git",
+                "site:{target} inurl:gitlab-ci.yml",
+                "site:{target} inurl:docker-compose"
+            ],
+            "backup_files": [
+                "site:{target} ext:backup",
+                "site:{target} ext:bak",
+                "site:{target} ext:old",
+                "site:{target} ext:~",
+                "site:{target} ext:swp",
+                "site:{target} inurl:backup"
+            ],
+            "sensitive_directories": [
+                "site:{target} intitle:\"index of\"",
+                "site:{target} inurl:config",
+                "site:{target} inurl:setup",
+                "site:{target} inurl:dev",
+                "site:{target} inurl:test",
+                "site:{target} inurl:staging",
+                "site:{target} inurl:admin"
+            ],
+            "cms": [
+                "site:{target} inurl:wp-content",
+                "site:{target} inurl:wp-admin",
+                "site:{target} intext:\"Welcome to WordPress\"",
+                "site:{target} intext:\"Powered by WordPress\"",
+                "site:{target} intext:\"Powered by Drupal\"",
+                "site:{target} intext:\"Powered by Joomla\""
+            ],
+            "logs_errors": [
+                "site:{target} ext:log",
+                "site:{target} inurl:logs",
+                "site:{target} intext:\"Warning:\"",
+                "site:{target} intext:\"DEBUG\"",
+                "site:{target} intext:\"error_reporting\"",
+                "site:{target} intext:\"exception in thread\"",
+                "site:{target} intext:\"stack trace\"",
+                "site:{target} intext:\"Error Message\"",
+                "site:{target} inurl:debug"
+            ],
+            "api_endpoints": [
+                "site:{target} inurl:api",
+                "site:{target} inurl:swagger",
+                "site:{target} inurl:api-docs",
+                "site:{target} inurl:graphql",
+                "site:{target} intext:\"API key\"",
+                "site:{target} intext:\"API token\"",
+                "site:{target} intext:\"access_key\"",
+                "site:{target} intext:\"secret_key\""
+            ],
+            "cloud_storage": [
+                "site:{target} inurl:s3.amazonaws.com",
+                "site:{target} inurl:storage.googleapis.com",
+                "site:{target} intext:\"aws_access_key\"",
+                "site:{target} inurl:azure filetype:blob",
+                "site:{target} intext:\"AKIA\""
+            ],
+            "security_keys": [
+                "site:{target} filetype:pem",
+                "site:{target} intext:\"BEGIN CERTIFICATE\"",
+                "site:{target} intext:\"BEGIN PRIVATE KEY\"",
+                "site:{target} intext:\"BEGIN RSA PRIVATE KEY\""
+            ],
+            "exposed_services": [
+                "site:{target} inurl:phpmyadmin",
+                "site:{target} inurl:server-status",
+                "site:{target} inurl:elmah.axd",
+                "site:{target} inurl:solr/admin/",
+                "site:{target} inurl:jira/login",
+                "site:{target} inurl:elasticsearch",
+                "site:{target} inurl:kibana",
+                "site:{target} inurl:grafana",
+                "site:{target} inurl:prometheus",
+                "site:{target} inurl:exchange/owa",
+                "site:{target} intext:\"Welcome to phpMyAdmin\"",
+                "site:{target} inurl:jenkins",
+                "site:{target} inurl:jira",
+                "site:{target} inurl:gitlab",
+                "site:{target} inurl:traefik",
+                "site:{target} inurl:kubernetes"
+            ]
+        }
         
         # Get dork patterns from config
         dork_categories = self.config.get('google_dorking', {}).get('dork_categories', {})
@@ -1017,52 +1120,6 @@ class ReconTool:
         else:
             # If no categories defined, use default dork patterns
             self.logger.info("No dork categories found in config, using default dork patterns")
-            default_categories = {
-                "credentials": [
-                    "site:{target} inurl:login",
-                    "site:{target} intext:password", 
-                    "site:{target} inurl:admin"
-                ],
-                "tech_files": [
-                    "site:{target} ext:php",
-                    "site:{target} ext:asp",
-                    "site:{target} ext:sql",
-                    "site:{target} ext:bak",
-                    "site:{target} ext:log",
-                    "site:{target} ext:xml"
-                ],
-                "sensitive_directories": [
-                    "site:{target} intitle:\"index of\"",
-                    "site:{target} inurl:config",
-                    "site:{target} inurl:setup",
-                    "site:{target} inurl:backup",
-                    "site:{target} inurl:dev",
-                    "site:{target} inurl:test"
-                ],
-                "cms": [
-                    "site:{target} inurl:wp-content",
-                    "site:{target} inurl:wp-admin"
-                ],
-                "errors": [
-                    "site:{target} \"SQL syntax\"",
-                    "site:{target} \"Warning:\"",
-                    "site:{target} \"error in your SQL syntax\""
-                ],
-                "tools": [
-                    "site:{target} intext:\"Welcome to phpMyAdmin\"",
-                    "site:{target} inurl:jenkins",
-                    "site:{target} inurl:jira",
-                    "site:{target} inurl:gitlab"
-                ],
-                "other": [
-                    "site:{target} filetype:pdf",
-                    "site:{target} intitle:\"dashboard\"",
-                    "site:{target} inurl:api",
-                    "site:{target} inurl:debug",
-                    "site:{target} inurl:staging",
-                    "site:{target} \"powered by\""
-                ]
-            }
             
             for category, patterns in default_categories.items():
                 formatted_categories[category] = []
@@ -1463,7 +1520,7 @@ class ReconTool:
         .dork-categories {{
             display: flex;
             flex-wrap: wrap;
-            gap: 20px;
+            gap: 10px;
         }}
         .dork-category {{
             flex: 1 0 300px;
@@ -1484,13 +1541,13 @@ class ReconTool:
             padding-left: 0;
         }}
         .dork-category li {{
-            margin-bottom: 8px;
+            margin-bottom: 4px; /* Reduced from 8px */
         }}
         .dork-category a {{
             text-decoration: none;
             color: #2980b9;
             display: block;
-            padding: 8px;
+            padding: 2px 2px; /* Reduced top/bottom padding from 8px to 5px */
             border-radius: 4px;
             transition: background-color 0.2s ease;
         }}
