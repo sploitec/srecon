@@ -8,18 +8,12 @@ A modular reconnaissance tool designed for red team engagements. This tool autom
   - Passive enumeration using subfinder
   - Active enumeration using dnsx with wordlists
 - IP resolution and mapping
-- HTTP/HTTPS service detection and analysis:
-  - Web server identification
-  - Status code detection
-  - Page title extraction
-  - Technology stack identification
+- HTTP/HTTPS service detection and analysis
 - Port scanning
 - Vulnerability scanning (Currently disabled)
 - Results export to JSON and HTML
-- Summary generation
 - Multi-threaded scanning with optimized performance
 - Interactive mode: Choose which scan phases to run
-- Configuration file support for customization
 
 ## TODO / Roadmap
 
