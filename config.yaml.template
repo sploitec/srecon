@@ -26,8 +26,9 @@ port_scan:
 
 # Google dorking settings
 google_dorking:
-  # Delay between requests in seconds to avoid rate limiting
-  delay_between_requests: 5
-  # Maximum results to request per query
+  # Delay between requests in seconds to avoid rate limiting (recommended: 15-30)
+  # Increase this value if you experience 429 (Too Many Requests) errors
+  delay_between_requests: 15
+  # Maximum results to request per query (max 100)
   max_results_per_query: 100
   # Use dork_categories and dork_patterns in the code if not specified here 

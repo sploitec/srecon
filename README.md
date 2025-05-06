@@ -11,7 +11,7 @@ A modular reconnaissance tool designed for red team engagements. This tool autom
 - HTTP/HTTPS service detection and analysis
 - Port scanning
 - Vulnerability scanning (Currently disabled)
-- Google dorking for discovering sensitive information
+- Google dorking query generation for manual investigation
 - Results export to JSON and HTML
 - Multi-threaded scanning with optimized performance
 - Interactive mode: Choose which scan phases to run
@@ -21,7 +21,7 @@ A modular reconnaissance tool designed for red team engagements. This tool autom
 The following improvements are planned for future development:
 
 - [ ] Implement Nuclei-based vulnerability scanning with proper error handling and parallel scanning
-- [x] Add advanced reconnaissance capabilities including Google dorking and subdomain takeover detection
+- [x] Add advanced reconnaissance capabilities including Google dorking query generation and subdomain takeover detection
 - [ ] Integrate additional discovery tools like Amass, Assetfinder, and cloud enumeration tools
 - [ ] Enhance reporting with interactive dashboards and additional export formats
 - [ ] Improve architecture with caching, database storage, and API interfaces
@@ -102,6 +102,7 @@ general:
   threads: 5                 # Default number of threads to use
   verbose: false             # Enable verbose output by default
   interactive: false         # Interactive mode: prompt before each scan phase
+  debug: false               # Enable debug mode with detailed timing and execution info
 
 # Subdomain enumeration settings
 subdomain_enumeration:
@@ -111,11 +112,6 @@ subdomain_enumeration:
 port_scan:
   scan_type: "top-1000"      # Port scan type: full, top-1000, top-100
   additional_args: "-T4"     # Additional nmap arguments
-  
-# Google dorking settings
-google_dorking:
-  delay_between_requests: 5  # Delay between requests in seconds to avoid rate limiting
-  max_results_per_query: 100 # Maximum results to request per query
 ```
 
 ### API Configuration (config/subfinder.yaml)
@@ -140,7 +136,7 @@ python srecon.py -d example.com -i
 ### Options:
 
 ```
-usage: srecon.py [-h] (-d DOMAIN | -f FILE) [-o OUTPUT] [-t THREADS] [-v] [-i] [--config CONFIG]
+usage: srecon.py [-h] (-d DOMAIN | -f FILE) [-o OUTPUT] [-t THREADS] [-v] [-i] [--debug] [--config CONFIG]
 
 Automated Reconnaissance Tool for Red Teaming
 
@@ -155,6 +151,7 @@ optional arguments:
                         Number of threads to use (default: from config or 5)
   -v, --verbose         Enable verbose output
   -i, --interactive     Interactive mode - prompt before each phase
+  --debug               Enable debug mode with detailed timing and execution info
   --config CONFIG       Path to custom config file
 ```
 
@@ -188,7 +185,7 @@ All scan results are stored in the `results` directory by default. For each scan
 - `http_services.txt` - Human-readable list of HTTP/HTTPS services with titles and technologies
 - `http_services.json` - Detailed HTTP/HTTPS service information in JSON format
 - `nmap_*.xml` - Raw nmap scan results for each IP
-- `google_dorks.txt` - Results from Google dorking reconnaissance
+- `google_dorks.txt` - Google dorking search queries for manual investigation
 - `results.json` - Complete results in JSON format
 - `report.html` - Comprehensive HTML report
 - `summary.txt` - Summary of findings
@@ -216,14 +213,14 @@ srecon/
 
 When running in interactive mode (`-i` flag), the tool will:
 
-1. Always run passive subdomain enumeration first without prompting
+1. Always run Google dorking query generation first without prompting
 2. Then prompt you before each subsequent scan phase:
+   - Passive subdomain enumeration
    - Active subdomain enumeration
    - IP resolution
    - HTTP/HTTPS service probing
    - Port scanning
    - Vulnerability scanning
-   - Google dorking
 
 This allows you to selectively run only the phases you're interested in, which can be useful for:
 - Focusing on specific aspects of reconnaissance

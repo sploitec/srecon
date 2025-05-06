@@ -310,7 +310,7 @@ class ReconTool:
 
     def subdomain_enumeration(self):
         """Enumerate subdomains of the target."""
-        # Always run passive subdomain enumeration
+        # Passive subdomain enumeration, now interactive
         self.logger.info("Starting passive subdomain enumeration")
         
         # Example using subfinder (you can replace this with your preferred tool)
@@ -954,295 +954,157 @@ class ReconTool:
         return vulnerabilities
 
     def google_dorking(self):
-        """Perform Google dorking to find sensitive information using combined queries."""
-        if not self.check_user_confirmation("Google dorking"):
-            self.logger.info("Skipping Google dorking")
-            return []
+        """Display Google dorking queries without asking for confirmation."""
+        self.logger.info("Generating Google dorking queries for manual search")
         
-        self.logger.info("Starting Google dorking reconnaissance")
-        
-        # Create output files
+        # Create output file
         output_file = os.path.join(self.output_dir, "google_dorks.txt")
         
-        # Initialize results storage
-        self.results["dorks"] = []
-        
-        # Get dork patterns from config or use default dorks
-        dork_patterns = self.config.get('google_dorking', {}).get('dork_patterns', [
-            "site:*.{target} inurl:login",
-            "site:*.{target} ext:php",
-            "site:*.{target} ext:asp",
-            "site:*.{target} intitle:\"index of\"",
-            "site:*.{target} intext:password",
-            "site:*.{target} inurl:config",
-            "site:*.{target} inurl:setup",
-            "site:*.{target} inurl:backup",
-            "site:*.{target} filetype:pdf",
-            "site:*.{target} inurl:wp-content",
-            "site:*.{target} inurl:wp-admin",
-            "site:*.{target} ext:sql",
-            "site:*.{target} ext:bak",
-            "site:*.{target} inurl:dev",
-            "site:*.{target} inurl:test",
-            "site:*.{target} inurl:admin",
-            "site:*.{target} intitle:\"dashboard\"",
-            "site:*.{target} ext:log",
-            "site:*.{target} inurl:api",
-            "site:*.{target} ext:xml",
-            "site:*.{target} inurl:debug",
-            "site:*.{target} inurl:staging",
-            "site:*.{target} \"powered by\"",
-            "site:*.{target} \"SQL syntax\"",
-            "site:*.{target} \"Warning:\"",
-            "site:*.{target} \"error in your SQL syntax\"",
-            "site:*.{target} intext:\"Welcome to phpMyAdmin\"",
-            "site:*.{target} inurl:jenkins",
-            "site:*.{target} inurl:jira",
-            "site:*.{target} inurl:gitlab"
-        ])
-        
-        # Group dorks into categories for better organization and combined queries
-        dork_categories = self.config.get('google_dorking', {}).get('dork_categories', {
-            "credentials": [
-                "site:*.{target} inurl:login",
-                "site:*.{target} intext:password",
-                "site:*.{target} inurl:admin"
-            ],
-            "tech_files": [
-                "site:*.{target} ext:php",
-                "site:*.{target} ext:asp",
-                "site:*.{target} ext:sql",
-                "site:*.{target} ext:bak",
-                "site:*.{target} ext:log",
-                "site:*.{target} ext:xml"
-            ],
-            "sensitive_directories": [
-                "site:*.{target} intitle:\"index of\"",
-                "site:*.{target} inurl:config",
-                "site:*.{target} inurl:setup",
-                "site:*.{target} inurl:backup",
-                "site:*.{target} inurl:dev",
-                "site:*.{target} inurl:test"
-            ],
-            "cms": [
-                "site:*.{target} inurl:wp-content",
-                "site:*.{target} inurl:wp-admin"
-            ],
-            "errors": [
-                "site:*.{target} \"SQL syntax\"",
-                "site:*.{target} \"Warning:\"",
-                "site:*.{target} \"error in your SQL syntax\""
-            ],
-            "tools": [
-                "site:*.{target} intext:\"Welcome to phpMyAdmin\"",
-                "site:*.{target} inurl:jenkins",
-                "site:*.{target} inurl:jira",
-                "site:*.{target} inurl:gitlab"
-            ],
-            "other": [
-                "site:*.{target} filetype:pdf",
-                "site:*.{target} intitle:\"dashboard\"",
-                "site:*.{target} inurl:api",
-                "site:*.{target} inurl:debug",
-                "site:*.{target} inurl:staging",
-                "site:*.{target} \"powered by\""
-            ]
-        })
-        
-        # If dork categories not provided in the config, create from the dork patterns
-        if not dork_categories:
-            # Group dorks into categories of max 5 dorks per category to avoid query length issues
-            dork_categories = {}
-            for i in range(0, len(dork_patterns), 5):
-                category_name = f"category_{i//5 + 1}"
-                dork_categories[category_name] = dork_patterns[i:i+5]
-        
-        # User agent rotations to avoid blocking
-        user_agents = [
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0',
-            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Safari/605.1.15',
-            'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36 Edg/92.0.902.55'
-        ]
-        
-        # Just use the main target domain with wildcard
+        # Just use the main target domain without wildcard
         main_domain = self.target
         
-        # Get delay between requests from config
-        delay = self.config.get('google_dorking', {}).get('delay_between_requests', 5)
+        # Default dork patterns if none are found in config
+        default_dork_patterns = [
+            "site:{target} inurl:login",
+            "site:{target} ext:php",
+            "site:{target} ext:asp",
+            "site:{target} intitle:\"index of\"",
+            "site:{target} intext:password",
+            "site:{target} inurl:config",
+            "site:{target} inurl:setup",
+            "site:{target} inurl:backup",
+            "site:{target} filetype:pdf",
+            "site:{target} inurl:wp-content",
+            "site:{target} inurl:wp-admin",
+            "site:{target} ext:sql",
+            "site:{target} ext:bak",
+            "site:{target} inurl:dev",
+            "site:{target} inurl:test",
+            "site:{target} inurl:admin",
+            "site:{target} intitle:\"dashboard\"",
+            "site:{target} ext:log",
+            "site:{target} inurl:api",
+            "site:{target} ext:xml",
+            "site:{target} inurl:debug",
+            "site:{target} inurl:staging",
+            "site:{target} \"powered by\"",
+            "site:{target} \"SQL syntax\"",
+            "site:{target} \"Warning:\"",
+            "site:{target} \"error in your SQL syntax\"",
+            "site:{target} intext:\"Welcome to phpMyAdmin\"",
+            "site:{target} inurl:jenkins",
+            "site:{target} inurl:jira",
+            "site:{target} inurl:gitlab"
+        ]
         
-        # Get max results from config
-        max_results_per_query = self.config.get('google_dorking', {}).get('max_results_per_query', 100)
+        # Get dork patterns from config
+        dork_categories = self.config.get('google_dorking', {}).get('dork_categories', {})
         
-        self.logger.info(f"Using {len(dork_categories)} dork categories against *.{main_domain}")
+        # Format all dorks by replacing {target} with the actual domain
+        formatted_categories = {}
         
-        # Warning about potential blocking
-        self.logger.warning("Note: Google may block automated searches. Using delays between requests.")
+        # Print debug info
+        self.logger.debug(f"Target domain: {main_domain}")
+        self.logger.debug(f"Found {len(dork_categories.items()) if dork_categories else 0} dork categories in config")
         
-        # Process each category with combined dorks
-        all_results = []
+        if dork_categories:
+            for category, patterns in dork_categories.items():
+                formatted_categories[category] = []
+                for pattern in patterns:
+                    # Replace {target} with actual domain without wildcard
+                    formatted_dork = pattern.replace("{target}", main_domain)
+                    formatted_categories[category].append(formatted_dork)
+        else:
+            # If no categories defined, use default dork patterns
+            self.logger.info("No dork categories found in config, using default dork patterns")
+            default_categories = {
+                "credentials": [
+                    "site:{target} inurl:login",
+                    "site:{target} intext:password", 
+                    "site:{target} inurl:admin"
+                ],
+                "tech_files": [
+                    "site:{target} ext:php",
+                    "site:{target} ext:asp",
+                    "site:{target} ext:sql",
+                    "site:{target} ext:bak",
+                    "site:{target} ext:log",
+                    "site:{target} ext:xml"
+                ],
+                "sensitive_directories": [
+                    "site:{target} intitle:\"index of\"",
+                    "site:{target} inurl:config",
+                    "site:{target} inurl:setup",
+                    "site:{target} inurl:backup",
+                    "site:{target} inurl:dev",
+                    "site:{target} inurl:test"
+                ],
+                "cms": [
+                    "site:{target} inurl:wp-content",
+                    "site:{target} inurl:wp-admin"
+                ],
+                "errors": [
+                    "site:{target} \"SQL syntax\"",
+                    "site:{target} \"Warning:\"",
+                    "site:{target} \"error in your SQL syntax\""
+                ],
+                "tools": [
+                    "site:{target} intext:\"Welcome to phpMyAdmin\"",
+                    "site:{target} inurl:jenkins",
+                    "site:{target} inurl:jira",
+                    "site:{target} inurl:gitlab"
+                ],
+                "other": [
+                    "site:{target} filetype:pdf",
+                    "site:{target} intitle:\"dashboard\"",
+                    "site:{target} inurl:api",
+                    "site:{target} inurl:debug",
+                    "site:{target} inurl:staging",
+                    "site:{target} \"powered by\""
+                ]
+            }
+            
+            for category, patterns in default_categories.items():
+                formatted_categories[category] = []
+                for pattern in patterns:
+                    # Replace {target} with actual domain without wildcard
+                    formatted_dork = pattern.replace("{target}", main_domain)
+                    formatted_categories[category].append(formatted_dork)
+        
+        # Verify we have dorks
+        total_dorks = sum(len(dorks) for dorks in formatted_categories.values())
+        self.logger.info(f"Generated {total_dorks} Google dork queries across {len(formatted_categories)} categories")
+        
+        # Print to console and save to file
+        print("\n=== Google Dorking Queries ===")
+        print(f"Target: {main_domain}")
+        print(f"Google search queries have been generated and stored in {output_file}")
         
         with open(output_file, 'w') as f:
-            f.write(f"Google Dorking Results for *.{main_domain}\n")
+            f.write(f"Google Dorking Queries for {main_domain}\n")
             f.write(f"Generated on: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+            f.write("Copy and paste these into Google search for manual investigation:\n\n")
             
-            for category, dorks in dork_categories.items():
-                # Replace {target} with the main domain in all dorks
-                formatted_dorks = [dork.replace("{target}", main_domain) for dork in dorks]
-                
-                self.logger.info(f"Processing category: {category} with {len(formatted_dorks)} dorks")
-                
-                # Join dorks with OR for a combined query
-                combined_dork = " OR ".join(formatted_dorks)
-                
-                f.write(f"\n=== Category: {category} ===\n")
-                f.write(f"Combined query: {combined_dork}\n\n")
-                
-                try:
-                    # Construct the search URL
-                    search_query = urllib.parse.quote(combined_dork)
-                    # Request more results to get a better sample
-                    url = f"https://www.google.com/search?q={search_query}&num={min(100, max_results_per_query)}"
+            # Display each category and its dorks
+            for category, dorks in formatted_categories.items():
+                if dorks:  # Only show categories with dorks
+                    f.write(f"\n=== {category.title()} ===\n")
                     
-                    # Random user agent to avoid detection
-                    headers = {
-                        'User-Agent': random.choice(user_agents),
-                        'Accept': 'text/html,application/xhtml+xml,application/xml',
-                        'Accept-Language': 'en-US,en;q=0.9',
-                        'Referer': 'https://www.google.com/'
-                    }
-                    
-                    # Make the request
-                    response = requests.get(url, headers=headers, timeout=15)
-                    
-                    # If successful, parse the results
-                    if response.status_code == 200:
-                        soup = BeautifulSoup(response.text, 'html.parser')
-                        
-                        # Find all search result links
-                        search_results = []
-                        
-                        # Google search results are in <div class="g"> elements
-                        for result in soup.select('div.g'):
-                            # Extract the link
-                            link_element = result.select_one('a')
-                            if link_element and 'href' in link_element.attrs:
-                                link = link_element['href']
-                                # Make sure it's an actual URL
-                                if link.startswith('http'):
-                                    # Extract title if available
-                                    title_element = result.select_one('h3')
-                                    title = title_element.text if title_element else "No title"
-                                    
-                                    # Extract snippet/description if available
-                                    snippet_element = result.select_one('div.VwiC3b')
-                                    snippet = snippet_element.text if snippet_element else "No description"
-                                    
-                                    # Determine which subdomain this belongs to
-                                    subdomain = "unknown"
-                                    try:
-                                        parsed_url = urllib.parse.urlparse(link)
-                                        hostname = parsed_url.netloc
-                                        if hostname.endswith(main_domain):
-                                            subdomain = hostname
-                                    except:
-                                        pass
-                                    
-                                    # Determine which specific dork matched this result
-                                    matching_dork = "unknown"
-                                    for dork in formatted_dorks:
-                                        # Very basic matching heuristic - can be improved
-                                        dork_terms = dork.lower().split()
-                                        content = (link + " " + title + " " + snippet).lower()
-                                        
-                                        # Count how many terms from the dork appear in the content
-                                        matches = sum(1 for term in dork_terms if term in content)
-                                        
-                                        # If more than half the terms match, consider it a match
-                                        if matches > len(dork_terms) / 2:
-                                            matching_dork = dork
-                                            break
-                                    
-                                    search_results.append({
-                                        'link': link,
-                                        'title': title,
-                                        'snippet': snippet,
-                                        'subdomain': subdomain,
-                                        'matching_dork': matching_dork
-                                    })
-                        
-                        # Write results for this category to file
-                        if search_results:
-                            # Group results by matching dork
-                            results_by_dork = {}
-                            for result in search_results:
-                                dork = result['matching_dork']
-                                if dork not in results_by_dork:
-                                    results_by_dork[dork] = []
-                                results_by_dork[dork].append(result)
-                            
-                            # Write results grouped by dork
-                            for dork, dork_results in results_by_dork.items():
-                                f.write(f"Matching dork: {dork}\n")
-                                for i, result in enumerate(dork_results, 1):
-                                    f.write(f"  {i}. {result['title']}\n")
-                                    f.write(f"     Subdomain: {result['subdomain']}\n")
-                                    f.write(f"     URL: {result['link']}\n")
-                                    f.write(f"     Description: {result['snippet']}\n\n")
-                        else:
-                            f.write("  No results found.\n\n")
-                        
-                        # Add to results
-                        category_results = {
-                            'category': category,
-                            'dorks': formatted_dorks,
-                            'results': search_results
-                        }
-                        all_results.append(category_results)
-                        
-                        self.logger.info(f"Found {len(search_results)} results for category '{category}'")
-                    else:
-                        self.logger.warning(f"Failed to fetch results for category '{category}'. Status code: {response.status_code}")
-                    
-                except Exception as e:
-                    self.logger.error(f"Error processing category '{category}': {str(e)}")
-                
-                # Sleep to avoid rate limiting
-                time.sleep(delay)
-            
-            # Add a summary section
-            f.write("\n\n=== Summary ===\n")
-            total_findings = sum(len(category_result.get('results', [])) for category_result in all_results)
-            f.write(f"Total findings: {total_findings}\n")
-            
-            # Group findings by subdomain
-            findings_by_subdomain = {}
-            for category_result in all_results:
-                for result in category_result.get('results', []):
-                    subdomain = result.get('subdomain', 'unknown')
-                    if subdomain not in findings_by_subdomain:
-                        findings_by_subdomain[subdomain] = []
-                    findings_by_subdomain[subdomain].append(result)
-            
-            # Write summary by subdomain
-            f.write("\nFindings by subdomain:\n")
-            for subdomain, findings in findings_by_subdomain.items():
-                f.write(f"  {subdomain}: {len(findings)} findings\n")
-            
-            # Write summary by category
-            f.write("\nFindings by category:\n")
-            for category_result in all_results:
-                category = category_result.get('category')
-                count = len(category_result.get('results', []))
-                f.write(f"  {category}: {count} findings\n")
+                    for dork in dorks:
+                        f.write(f"{dork}\n")
         
-        # Store in results
-        self.results["dorks"] = all_results
+        # Store in results for report generation
+        self.results["dorks"] = []
+        for category, dorks in formatted_categories.items():
+            if dorks:  # Only include categories with dorks
+                self.results["dorks"].append({
+                    'category': category,
+                    'queries': dorks
+                })
         
-        self.logger.info(f"Google dorking completed. Results saved to {output_file}")
+        self.logger.info(f"Google dorking queries saved to {output_file}")
+        print("Moving to next phase of reconnaissance...")
         
-        # Return the results
         return self.results["dorks"]
 
     def run_recon(self):
@@ -1253,10 +1115,24 @@ class ReconTool:
             self.logger.info("Running in interactive mode")
             print("\n=== Sploitec Recon Interactive Mode ===")
             print(f"Target: {self.target}")
-            print("Passive subdomain enumeration will run first, then you will be prompted before each additional phase.\n")
+            print("Google dorking query generation will run automatically. Other phases will prompt for confirmation.")
+            print("Remaining phases in order:")
+            print("1. Passive subdomain enumeration")
+            print("2. Active subdomain enumeration")
+            print("3. IP resolution")
+            print("4. HTTP/HTTPS service probing")
+            print("5. Port scanning")
+            print("6. Vulnerability scanning\n")
         
-        # Always execute passive subdomain enumeration without prompting
-        self.subdomain_enumeration()
+        # Google dorking is now the first step without asking for confirmation
+        self.logger.info("Running Google dorking")
+        self.google_dorking()
+        
+        # Now ask for passive subdomain enumeration
+        if not self.interactive or self.check_user_confirmation("passive subdomain enumeration"):
+            self.subdomain_enumeration()
+        else:
+            self.logger.info("Skipping passive subdomain enumeration")
         
         # Execute the rest of the recon pipeline with interactive prompts if enabled
         self.active_subdomain_enumeration()
@@ -1264,7 +1140,6 @@ class ReconTool:
         self.http_probe()
         self.port_scanning()
         self.vulnerability_scanning()
-        self.google_dorking()  # Add the Google dorking step
         
         # Save final results
         output_file = self.save_results()
@@ -1317,26 +1192,8 @@ class ReconTool:
             f.write(f"Open ports discovered: {total_ports}\n")
             f.write(f"Potential vulnerabilities: {len(self.results['vulnerabilities'])}\n")
             
-            # Add Google dorking summary
-            dork_results = self.results.get('dorks', [])
-            if dork_results:
-                # Calculate total findings
-                total_findings = sum(len(category_result.get('results', [])) for category_result in dork_results)
-                
-                f.write(f"Google dorking findings: {total_findings}\n")
-                
-                # List top categories
-                f.write("  Top categories:\n")
-                category_counts = {}
-                for category_result in dork_results:
-                    category = category_result.get('category')
-                    count = len(category_result.get('results', []))
-                    category_counts[category] = count
-                
-                for category, count in sorted(category_counts.items(), key=lambda x: x[1], reverse=True)[:3]:
-                    f.write(f"    {category}: {count} findings\n")
-            else:
-                f.write("Google dorking: Not performed\n")
+            # Update Google dorking section to be simple
+            f.write("Google dorking: Queries provided for manual investigation\n")
             
             # Add high-severity vulnerabilities to summary
             high_vulns = [v for v in self.results["vulnerabilities"] if v.get("severity", "").lower() in ["high", "critical"]]
@@ -1364,6 +1221,62 @@ class ReconTool:
                     domain_to_ips[domain] = []
                 domain_to_ips[domain].append(ip)
         
+        # Create Google dorking section
+        google_dorks_section = """
+        <div class="container">
+            <h2>Google Dorking</h2>
+            <p>Click on any query below to open Google search in a new tab:</p>
+            
+            <div class="dork-categories">
+"""
+
+        # Add dork categories and their queries
+        for category_data in self.results.get('dorks', []):
+            category = category_data.get('category', '').title()
+            queries = category_data.get('queries', [])
+            
+            google_dorks_section += f"""
+                <div class="dork-category">
+                    <h3>{category} ({len(queries)})</h3>
+                    <ul>
+"""
+            
+            for query in queries:
+                # Properly escape the query for URL and HTML
+                escaped_query = urllib.parse.quote(query)
+                google_dorks_section += f"""
+                        <li><a href="https://www.google.com/search?q={escaped_query}" target="_blank">{query}</a></li>
+"""
+            
+            google_dorks_section += """
+                    </ul>
+                </div>
+"""
+        
+        # If no dorks were found, show a message
+        if not self.results.get('dorks', []):
+            google_dorks_section += """
+                <div class="dork-category">
+                    <h3>No Google Dorks Generated</h3>
+                    <p>No Google dorking queries were generated. Please check your configuration.</p>
+                </div>
+"""
+        
+        google_dorks_section += """
+            </div>
+            
+            <p><a href="google_dorks.txt">View all queries in text format</a></p>
+        </div>
+"""
+
+        # Create vulnerabilities section
+        vuln_section = """
+        <div class="container">
+            <h2>Vulnerabilities</h2>
+            <p>Vulnerabilities detected: {len(self.results['vulnerabilities'])}</p>
+        </div>
+        """
+
         # Create basic HTML template
         html_template = f"""<!DOCTYPE html>
 <html lang="en">
@@ -1537,12 +1450,53 @@ class ReconTool:
             content: '\\2212';
         }}
         .collapse-content {{
-            padding: 0 18px;
             max-height: 0;
             overflow: hidden;
             transition: max-height 0.2s ease-out;
             background-color: #f9f9f9;
             border-radius: 0 0 5px 5px;
+        }}
+        .collapse-content.active {{
+            max-height: 1000px;
+        }}
+        /* Google dorking styling */
+        .dork-categories {{
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+        }}
+        .dork-category {{
+            flex: 1 0 300px;
+            background-color: #f5f5f5;
+            border-radius: 5px;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-left: 4px solid #3498db;
+        }}
+        .dork-category h3 {{
+            margin-top: 0;
+            color: #2c3e50;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 10px;
+        }}
+        .dork-category ul {{
+            list-style-type: none;
+            padding-left: 0;
+        }}
+        .dork-category li {{
+            margin-bottom: 8px;
+        }}
+        .dork-category a {{
+            text-decoration: none;
+            color: #2980b9;
+            display: block;
+            padding: 8px;
+            border-radius: 4px;
+            transition: background-color 0.2s ease;
+        }}
+        .dork-category a:hover {{
+            background-color: #e9f7fe;
+            text-decoration: underline;
         }}
     </style>
 </head>
@@ -1601,11 +1555,16 @@ class ReconTool:
     </div>
     
     <div class="tabs">
-        <button class="tablinks" onclick="openTab(event, 'Subdomains')" id="defaultOpen">Subdomains</button>
+        <button class="tablinks" onclick="openTab(event, 'GoogleDorks')" id="defaultOpen">Google Dorks</button>
+        <button class="tablinks" onclick="openTab(event, 'Subdomains')">Subdomains</button>
         <button class="tablinks" onclick="openTab(event, 'HTTP')">HTTP Services</button>
         <button class="tablinks" onclick="openTab(event, 'IPs')">IP Addresses</button>
         <button class="tablinks" onclick="openTab(event, 'Ports')">Ports & Services</button>
         <button class="tablinks" onclick="openTab(event, 'Vulnerabilities')">Vulnerabilities</button>
+    </div>
+    
+    <div id="GoogleDorks" class="tabcontent">
+        {google_dorks_section}
     </div>
     
     <div id="Subdomains" class="tabcontent">
