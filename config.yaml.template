@@ -22,4 +22,12 @@ port_scan:
   # Port scan type: full, top-1000, top-100
   scan_type: "top-1000"
   # Additional nmap arguments
-  additional_args: "-T4" 
+  additional_args: "-T4"
+
+# Google dorking settings
+google_dorking:
+  # Delay between requests in seconds to avoid rate limiting
+  delay_between_requests: 5
+  # Maximum results to request per query
+  max_results_per_query: 100
+  # Use dork_categories and dork_patterns in the code if not specified here 
